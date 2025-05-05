@@ -2,6 +2,6 @@
 
 Requires MATLAB toolboxes:
 
-Parser: YALMIP, SOSTOOLS, and CVX
+**Parser**: YALMIP, SOSTOOLS, and CVX
 
-Solvers: IPOPT, Mosek, and SeDuMi
+**Solvers**: IPOPT, Mosek, and SeDuMi
