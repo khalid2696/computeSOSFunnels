@@ -1,4 +1,4 @@
-# Numerically compute Quadratic Funnels &mdash; invariant sets parametrized by ellipsoidal matrices &mdash; using SOS Programming based on Lyapunov theory
+# Numerically compute 'Quadratic Funnels' &mdash; invariant sets parametrized by ellipsoidal matrices &mdash; using SOS Programming based on Lyapunov theory
 
 Requires MATLAB toolboxes:
 
