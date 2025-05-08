@@ -5,12 +5,15 @@ clc; clearvars; close all;
 %WARNING: Will have to use the same variable names as below if we want to
 %         pass onto the corresponding scripts
 
+%% [INPUT] specify initial and final states
+
+xinitial = [0; 0; pi/2];   % initial state: origin, pointing North 
+xfinal   = [2; 5; pi/2];   % desired final state 
+
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 10;
 numTimeSteps = 25;         % number of time samples
-xinitial = [0; 0; pi/2];   % initial state: origin, pointing North 
-xfinal   = [1; 4; pi/2];   % desired final state 
 
 drawFlag = 1; %uncomment this if you want to plot results
 run("Step1_NominalTrajectory.m");
@@ -58,11 +61,22 @@ disp('- - - - - - -'); disp(" ");
 
 %% Time-conditioned invariant set analysis (with time-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
+clearvars; close all; 
 keyboard;
 
+%specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
-run("Step4_computeTimeSampledInvarianceCertificates.m");
+rhoGuessChoice = 'const'; %options: 'const' [DEFAULT] and 'exp'
+                          %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
+% Option1: constant rho_guess
+rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails, 
+                               %keep value between 0 and 1
 
+% Option2: Exponentially (quickly) increasing rho_guess 
+rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
+                               %keep value greater than 0 (increasing fn)
+
+run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels

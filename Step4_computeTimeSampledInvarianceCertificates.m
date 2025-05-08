@@ -1,4 +1,4 @@
-clc; clearvars; close all
+%clc; clearvars; close all
 
 warning('off','MATLAB:singularMatrix');
 
@@ -41,7 +41,7 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-rhoStepUpValue = 0.05; % analagous to alpha in gradient descent
+rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
                        %Default Value: 0.001
 
@@ -54,20 +54,30 @@ goalScaling = 0.8;  %Keep it less than 1
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % can include a binary search to determine a good initial guess -- between 0 and 1
 
-% Option1: constant rho_guess
-rhoInitialGuessConstant = 0.85; %[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
+if ~exist('rhoGuessChoice','var')
+    rhoGuessChoice = 'const';
+end 
 
-% Option2: Exponentially (quickly) increasing rho_guess (only if constant doesn't work)
+% Option1: constant rho_guess -- rhoGuessChoice = 'const'
+%[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
+if ~exist('rhoInitialGuessConstant','var')
+    rhoInitialGuessConstant = 0.4;
+end 
+
+% Option2: Exponentially (quickly) increasing rho_guess -- rhoGuessChoice = 'exp'
+% (only if constant doesn't work)
 % rhoGuess_k = 1 * exp(-c*(t_k - tf)/(t0 - tf)), 
 % t_k = tf --> rhoVal = 1; t_k = 0 --> rhoVal = some small number (1/e^c); 
-rhoInitialGuessExpCoeff = 1.5;   %[TUNEABLE] increase 'c' value if initial guess fails 
-                               %Default Value: 2                          
 
+%[TUNEABLE] increase value if initial guess fails                         
+if ~exist('rhoInitialGuessExpCoeff','var')
+    rhoInitialGuessExpCoeff = 1.5;
+end
 %% Get the scaling for initial guess of level set boundary value, rho
 
 [rhoInitialGuess, candidateV] = getInitialRhoGuessAndCandidateV (time_instances, xbar, deviationDynamics, P, ...
                                                                     rhoInitialGuessConstant, rhoInitialGuessExpCoeff, ...
-                                                                       'const'); 
+                                                                       rhoGuessChoice); 
                                                                     %options - 'const' (option1) or 'exp' (option2)
 ellipsoidMatrices = P; %initial guess of ellipsoid matrices are the cost-to-go matrices from TVLQR
 
@@ -107,7 +117,7 @@ else
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-keyboard
+%keyboard
 
 %% Alternation Loop -- proceed if we're able to get a feasible initial guess
 
@@ -183,7 +193,7 @@ for iter=1:maxIter
         
         title('Optimised funnel certificate');
         
-        %display some volumetric properties
+        % display some volumetric properties
         disp('Volume of computed inlet set: '); disp(1/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1))))); disp(' ');
         disp('Volume of input initial set: '); disp(1/sqrt(det(startRegionEllipsoidMatrix))); disp(' ');
 
@@ -207,6 +217,19 @@ for iter=1:maxIter
     
 end
 
+%% Display some relevant metrics
+
+disp('Volume ratio of computed inlet to input inlet set (should be > 1):')
+disp(sqrt(det(startRegionEllipsoidMatrix))/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1)))));
+
+disp('Volume ratio of computed outlet to input outlet set (should be < 1):')
+disp(sqrt(det(goalRegionEllipsoidMatrix))/sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end)))));
+
+disp('Volume ratio of computed inlet to outlet:')
+disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1)))));
+
+%% Status message
+
 clc
 
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
@@ -219,7 +242,6 @@ multiplierTerms = feasibleMultiplierTerms;
 inletRegion = startRegionEllipsoidMatrix;
 outletRegion = goalRegionEllipsoidMatrix;
 save('./precomputedData/setInvarianceCertificates.mat', 'time_instances', 'candidateV', 'rhoScaling', 'ellipsoidMatrices', 'inletRegion', 'outletRegion', 'multiplierTerms');
-
 
 disp('Saved the time-sampled ellipsoidal matrices parametrizing the invariant sets to a file!');
 disp(' ');
@@ -421,10 +443,10 @@ function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ..
     end
     
     %scaling the coefficients of V and rho by the same factor
-    for k= 1:1:N
-        sol_candidateVArray{k} = temp_VSol/sol_rhoValsArray{end};
-        sol_rhoValsArray{k} = sol_rhoValsArray{k}/sol_rhoValsArray{end};
-    end
+    %for k= 1:1:N
+    %    sol_candidateVArray{k} = temp_VSol/sol_rhoValsArray{end};
+    %    sol_rhoValsArray{k} = sol_rhoValsArray{k}/sol_rhoValsArray{end};
+    %end
 end
 
 
