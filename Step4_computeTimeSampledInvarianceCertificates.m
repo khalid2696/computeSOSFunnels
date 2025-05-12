@@ -55,7 +55,7 @@ goalScaling = 0.8;  %Keep it less than 1
 % can include a binary search to determine a good initial guess -- between 0 and 1
 
 if ~exist('rhoGuessChoice','var')
-    rhoGuessChoice = 'const';
+    rhoGuessChoice = 'const'; %options: 'const' or 'exp' (if const doesn't work out)
 end 
 
 % Option1: constant rho_guess -- rhoGuessChoice = 'const'
@@ -100,7 +100,7 @@ plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
 plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
-[~, multiplierTerms, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
+[~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
@@ -130,7 +130,6 @@ for iter=1:maxIter
     % ------ L-Step: Finding polynomial Lagrange multipliers  ------ %
     % Feasibility check to see whether we're able to determine multiplier terms 
     % at all time instances for a given guess of level-set boundary (rho) values and candidate V 
-
     [~, multiplierTerms, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, currRhoScaling, ...
                                                                             startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                               multiplierPolyDeg, options, tolerance);
@@ -162,6 +161,8 @@ for iter=1:maxIter
     %keyboard
     
     % ------ V-step: Finding Lyapunov function & level-set boundary value ------ %
+    % Optimising the level-set volume through level-set boundary (rho) values and Lyapunov functions V
+    % at all time instances, for the feasible multipliers obtained in the previous step 
     [~, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ...
                                   findLyapFnAndLevelSetValues(time_instances, xbar, deviationDynamics, candidateV, multiplierTerms, ...
                                                                 startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
@@ -174,7 +175,7 @@ for iter=1:maxIter
         break
     end
     
-    % Extracting the solution and converting to Matrix format
+    % Extracting the solutions and converting to Matrix format
     ellipsoidMatrices = NaN(n,n,length(time_instances));
     currRhoScaling = NaN(size(time_instances));
     
@@ -247,7 +248,7 @@ disp('Saved the time-sampled ellipsoidal matrices parametrizing the invariant se
 disp(' ');
 %% ---------------------  Function definitions  ----------------------------
 
-%% SOS Program Functions
+%% SOS Program Functions -- the two alternating steps
 
 function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoGuess, M_i, M_f, ...
