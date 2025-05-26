@@ -16,7 +16,7 @@ maxTimeHorizon = 10;
 numTimeSteps = 25;         % number of time samples
 
 drawFlag = 1; %uncomment this if you want to plot results
-run("Step1_NominalTrajectory.m");
+run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Design a time-varying LQR feedback controller
@@ -30,7 +30,7 @@ terminalRegionScaling = 10; % Terminal constraint cost
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
 
-run("Step2_LQR.m");
+run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
@@ -76,7 +76,7 @@ rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails
 rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
-%run("Step4_computeTimeSampledInvarianceCertificates.m");
+run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
