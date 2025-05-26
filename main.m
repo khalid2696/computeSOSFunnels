@@ -8,7 +8,7 @@ clc; clearvars; close all;
 %% [INPUT] specify initial and final states
 
 xinitial = [0; 0; pi/2];   % initial state: origin, pointing North 
-xfinal   = [2; 5; pi/2];   % desired final state 
+xfinal   = [1; 4; pi/2];   % desired final state 
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
