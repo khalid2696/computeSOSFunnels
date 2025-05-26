@@ -76,7 +76,7 @@ rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails
 rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
-run("Step4_computeTimeSampledInvarianceCertificates.m");
+%run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
