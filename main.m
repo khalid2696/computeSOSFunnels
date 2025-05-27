@@ -5,20 +5,27 @@ clc; clearvars; close all;
 %WARNING: Will have to use the same variable names as below if we want to
 %         pass onto the corresponding scripts
 
-%% [INPUT] specify initial and final states
+%% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
-xinitial = [0; 0; pi/2];   % initial state: origin, pointing North 
-xfinal   = [1; 4; pi/2];   % desired final state 
+initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
+finalPose   = [-1; 4; 2; 0; 0; 0];   % desired final pose
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 10;
-numTimeSteps = 25;         % number of time samples
+maxTimeHorizon = 5;
+numTimeSteps = 40;         % number of time samples
 
-drawFlag = 1; %uncomment this if you want to plot results
+drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
+% for debugging
+load('./precomputedData/nominalTrajectory.mat');
+time_instances(end)
+x_nom(:,1)'
+x_nom(:,end)'
+
+keyboard
 %% Design a time-varying LQR feedback controller
 
 %Cost matrices
