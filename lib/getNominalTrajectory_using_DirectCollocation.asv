@@ -2,7 +2,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
 getNominalTrajectory_using_DirectCollocation(x0, xf, T_max, N, quadParameters)
 
     %% Optimisation parameters - cost function and state/input constraints
-    timeHorizon_weight = 2;
+    timeHorizon_weight = 3;
     controlEffort_weight = 0.1;
     
     %state constraints
@@ -71,7 +71,9 @@ getNominalTrajectory_using_DirectCollocation(x0, xf, T_max, N, quadParameters)
     % Rotor speeds can be computed using the mixer model with parameters: 
     % thrust coefficient (k), counter-moment coefficient (d) and arm length (l)
     constraints = [constraints, thrustSaturation(1) <= U(1,:), U(1,:) <= thrustSaturation(2)]; % Thrust
-    constraints = [constraints, momentSaturation(1) <= U(2:4,:), U(2:4,:) <= momentSaturation(2)]; % Torques
+    constraints = [constraints, momentSaturation(1) <= U(2,:), U(2,:) <= momentSaturation(2)]; % Torques
+    constraints = [constraints, momentSaturation(1) <= U(3,:), U(4,:) <= momentSaturation(2)]; % Torques
+    constraints = [constraints, momentSaturation(1) <= U(4,:), U(4,:) <= momentSaturation(2)]; % Torques
     constraints = [constraints, U(1,end) == m*g]; %hover at terminal state
     
     %% Solve using IPOPT
@@ -129,8 +131,7 @@ function f = quadrotor_dynamics(x, u, quadParameters)
     t_theta = tan(theta);
     sec_theta = sec(theta);
     
-    % Quadrotor dynamics 
-    % Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
+    % Closed-form dynamics
     f = [
         % Position derivatives
         vx;

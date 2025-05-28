@@ -8,21 +8,21 @@ clc; clearvars; close all;
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [-1; 4; 2; 0; 0; 0];   % desired final pose
+finalPose   = [0; -3; 2; 0; 0; 0];   % desired final pose
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 5;
-numTimeSteps = 40;         % number of time samples
+numTimeSteps = 25;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
-% for debugging
+%% for debugging
 load('./precomputedData/nominalTrajectory.mat');
 time_instances(end)
-x_nom(:,1)'
+%x_nom(:,1)'
 x_nom(:,end)'
 
 keyboard

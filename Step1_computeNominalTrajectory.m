@@ -4,6 +4,17 @@
 disp('Hang on.. computing nominal trajectory using direct collocation-based trajectory optimisation');
 disp(' ');
 
+%% Quadrotor Parameters
+quadParameters.m = 0.5;        % mass (kg)
+quadParameters.g = 9.81;       % gravity (m/s^2)
+%quadParameters.J = [4.856e-3, 4.856e-3, 8.801e-3]; % moment of inertia (kg⋅m^2)
+quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2)
+
+% Quadrotor behavior:
+% -ve roll for +ve y
+% +ve pitch for +ve x
+% zB vertically up
+
 %% Add directories
 addpath('./lib/');
 
@@ -12,7 +23,7 @@ addpath('./lib/');
 if exist('numTimeSteps','var')
     N = numTimeSteps;
 else
-    N = 40; % default number of time steps
+    N = 25; % default number of time steps
 end
 
 if ~exist('drawFlag','var')
@@ -32,19 +43,18 @@ if exist('initialPose','var') || exist('finalPose','var')
     pf = finalPose(1:3); eulerf = finalPose(4:6);
 else
     p0 = [0; 0; 2]; euler0 = [0; 0; 0];  % default initial pose -- at origin pointing North 
-    pf = [-2; -3; 2]; eulerf = [0; 0; 0];  % some random final pose
+    pf = [1.5; 4.5; 2]; eulerf = [0; 0; 0];  % some random final pose
 end
 
-%% Initial and target states : [pos, vel, quat, omega]
+%% Initial and target states : [pos, vel, angles, omega]
 
-q0 = eul2quat(euler0); qf = eul2quat(eulerf); % Convert to quaternions
-x0 = [p0; zeros(3,1); q0; zeros(3,1)]; %start from zero linear/angular velocities
-xf = [pf; zeros(3,1); qf; zeros(3,1)]; %end at zero linear/angular velocities
+x0 = [p0; zeros(3,1); euler0; zeros(3,1)]; %start from zero linear/angular velocities
+xf = [pf; zeros(3,1); eulerf; zeros(3,1)]; %end at zero linear/angular velocities
 
 %% Nominal trajectory and nominal/open-loop control input (feedforward term)
 
 tic
-[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(x0, xf, T_max, N);
+[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(x0, xf, T_max, N, quadParameters);
 toc
 
 disp('Finshed computing nominal trajectory and nominal (feedforward) input tape');
@@ -69,51 +79,46 @@ if drawFlag
     plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
     
     % ---- Just for dev and debug -----%
-    %plot_input_profiles(time_instances, u_nom);
-    %plot_quaternions(time_instances, x_nom);
-    %plot_Euler_angles(time_instances, x_nom);
+    plot_Euler_angles(time_instances, x_nom);
+    plot_input_profiles(time_instances, u_nom);
 end
 
 clearvars; %cleanup the workspace after saving relevant data and plotting
 
 %% Local Function definitions
 
-function q = eul2quat(eulerAngle)
-    % Convert Euler angles [roll; pitch; yaw] to quaternion [w; x; y; z]
-    roll = eulerAngle(1); pitch = eulerAngle(2); yaw = eulerAngle(3);
-    
-    cr = cos(roll/2); sr = sin(roll/2);
-    cp = cos(pitch/2); sp = sin(pitch/2);
-    cy = cos(yaw/2); sy = sin(yaw/2);
-    
-    q = [cr*cp*cy + sr*sp*sy; % w
-         sr*cp*cy - cr*sp*sy; % x
-         cr*sp*cy + sr*cp*sy; % y
-         cr*cp*sy - sr*sp*cy]; % z
-end
+% function q = eul2quat(eulerAngle)
+%     % Convert Euler angles [roll; pitch; yaw] to quaternion [w; x; y; z]
+%     roll = eulerAngle(1); pitch = eulerAngle(2); yaw = eulerAngle(3);
+% 
+%     cr = cos(roll/2); sr = sin(roll/2);
+%     cp = cos(pitch/2); sp = sin(pitch/2);
+%     cy = cos(yaw/2); sy = sin(yaw/2);
+% 
+%     q = [cr*cp*cy + sr*sp*sy; % w
+%          sr*cp*cy - cr*sp*sy; % x
+%          cr*sp*cy + sr*cp*sy; % y
+%          cr*cp*sy - sr*sp*cy]; % z
+% end
+% 
+% function euler = quat2euler(q)
+%     % Converts quaternion [q0, q1, q2, q3] to Euler angles [roll; pitch; yaw]
+%     q0 = q(1); q1 = q(2); q2 = q(3); q3 = q(4);
+% 
+%     % Compute Euler angles
+%     roll = atan2(2 * (q0 * q1 + q2 * q3), 1 - 2 * (q1^2 + q2^2)); % φ (roll)
+%     pitch = asin(2 * (q0 * q2 - q3 * q1)); % θ (pitch)
+%     yaw = atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2^2 + q3^2)); % ψ (yaw)
+% 
+%     % Return as a column vector
+%     euler = [roll; pitch; yaw];
+% end
 
-function euler = quat2euler(q)
-    % Converts quaternion [q0, q1, q2, q3] to Euler angles [roll; pitch; yaw]
-    q0 = q(1); q1 = q(2); q2 = q(3); q3 = q(4);
-
-    % Compute Euler angles
-    roll = atan2(2 * (q0 * q1 + q2 * q3), 1 - 2 * (q1^2 + q2^2)); % φ (roll)
-    pitch = asin(2 * (q0 * q2 - q3 * q1)); % θ (pitch)
-    yaw = atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2^2 + q3^2)); % ψ (yaw)
-
-    % Return as a column vector
-    euler = [roll; pitch; yaw];
-end
 
 function plot_flat_outputs(time_instances, x_nom, scaling)
 
     if nargin < 3
         scaling = 1; %scaling for the quadrotor visual
-    end
-
-    for k=1:length(time_instances)
-        thisQuat = x_nom(7:10,k);
-        eulerAngle(:,k) = quat2euler(thisQuat);
     end
     
     %Plot results
@@ -141,7 +146,7 @@ function plot_flat_outputs(time_instances, x_nom, scaling)
     ylabel('p_z [m]');
     
     subplot(3,1,3)
-    plot(time_instances, eulerAngle(3,:)*180/pi); %heading
+    plot(time_instances, x_nom(9,:)*180/pi); %heading
     xlabel('time');
     ylabel('Heading [deg]');
 end
@@ -195,8 +200,6 @@ function plot_quadrotor(x, y, heading, scaling)
 end
 
 
-
-
 function plot_input_profiles(time_instances_opt, u_opt)
     figure;
 
@@ -217,48 +220,44 @@ function plot_input_profiles(time_instances_opt, u_opt)
     ylabel('M_r [N-m]');
 end
 
-function plot_quaternions(time_instances_opt, x_opt)
-    figure; title('Quaternion');
-    
-    subplot(4,1,1)
-    plot(time_instances_opt, x_opt(7,:)); 
-    ylabel('q_0');
-    
-    subplot(4,1,2)
-    plot(time_instances_opt, x_opt(8,:)); 
-    ylabel('q_1');
-    
-    subplot(4,1,3)
-    plot(time_instances_opt, x_opt(9,:)); 
-    ylabel('q_2');
-    
-    subplot(4,1,4)
-    plot(time_instances_opt, x_opt(10,:)); 
-    ylabel('q_3');
-end
+% function plot_quaternions(time_instances_opt, x_opt)
+%     figure; title('Quaternion');
+% 
+%     subplot(4,1,1)
+%     plot(time_instances_opt, x_opt(7,:)); 
+%     ylabel('q_0');
+% 
+%     subplot(4,1,2)
+%     plot(time_instances_opt, x_opt(8,:)); 
+%     ylabel('q_1');
+% 
+%     subplot(4,1,3)
+%     plot(time_instances_opt, x_opt(9,:)); 
+%     ylabel('q_2');
+% 
+%     subplot(4,1,4)
+%     plot(time_instances_opt, x_opt(10,:)); 
+%     ylabel('q_3');
+% end
 
 function plot_Euler_angles(time_instances_opt, x_opt)
     
-    for k=1:length(time_instances_opt)
-        thisQuat = x_opt(7:10,k);
-        eulerAngle(:,k) = quat2euler(thisQuat);
-    end
 
     % Euler angles
     figure; title('Euler angles');
     
     subplot(3,1,1)
-    plot(time_instances_opt, eulerAngle(1,:)*180/pi); %roll
+    plot(time_instances_opt, x_opt(7,:)*180/pi); %roll
     xlabel('time');
     ylabel('Roll [deg]');
     
     subplot(3,1,2)
-    plot(time_instances_opt, eulerAngle(2,:)*180/pi); %pitch
+    plot(time_instances_opt, x_opt(8,:)*180/pi); %pitch
     xlabel('time');
     ylabel('Pitch [deg]');
     
     subplot(3,1,3)
-    plot(time_instances_opt, eulerAngle(3,:)*180/pi); %yaw
+    plot(time_instances_opt, x_opt(9,:)*180/pi); %yaw
     xlabel('time');
     ylabel('Yaw [deg]');
 end
