@@ -38,6 +38,8 @@ x = createSymbolicVector('x', n); %state vector
 u = createSymbolicVector('u', m); %input vector
 %x = [x1 x2 x3]'; u = [u1 u2]'; %column matrix by convention -- nx1
 
+keyboard
+
 % Define the system dynamics: x_dot = f(x, u)
 symbolicDynamics = [
     u(1) * cos(x(3));   % x_dot

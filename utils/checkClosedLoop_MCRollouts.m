@@ -21,11 +21,18 @@ N = length(time_instances);
 
 %Specify the start time for the rollouts
 if ~exist('startTimeIndex','var')
-    startTimeIndex = randi(N-1); %should be in between 1 and N-1
+    %startTimeIndex = randi(N-1); %should be in between 1 and N-1
+    startTimeIndex = 1;
 end
 
 if ~exist('num_samples','var')
-    num_samples = 1000; %default number of rollouts
+    num_samples = 500; %default number of rollouts
+end
+
+if exist('startMaxPerturbation','var')
+    rho0 = startMaxPerturbation;
+else
+    rho0 = 0.3; %decrease this for a smaller initial set
 end
 
 %% Monte Carlo forward rollouts
@@ -35,8 +42,8 @@ end
 t0 = time_instances(1); tf = time_instances(end); t_start = time_instances(startTimeIndex);
 Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1); %sampling-time
 
-c = 3; %increase this for narrower initial set
-rho = exp(c*(t_start-t0)/(t0-tf));
+c = 3;      %increase this for steeper decrease in rho(t)
+rho = rho0*exp(c*(t_start-t0)/(t0-tf));
 
 %Sampling initial states from an initial ellipsoidal set
 if ~exist('initial_state_covariance', 'var')
@@ -84,8 +91,10 @@ disp(' ');
 disp('Plotting trajectories, input profiles, and metrics from MC rollouts..');
 disp(' ');
 
-plot_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
-plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances)
+plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
+plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
+
+plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
 plot_error_metrics(errors, costs, rollout_time_horizon);
 
 clearvars;
@@ -166,12 +175,9 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
 end
 
 
-function plot_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
+function plot_xy_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
     % Plot all trajectories and nominal trajectory
-    figure;
-    hold on;
-    grid on; 
-    axis equal;
+    figure; hold on; grid on; axis equal;
     
     plot(rollout_x_nom(1, :), rollout_x_nom(2, :), 'k--', 'LineWidth', 2);
 
@@ -204,30 +210,58 @@ function plot_trajectories(trajectories, rollout_x_nom, covariance, complete_x_n
     %hold off;
 end
 
+function plot_xyz_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
+    % Plot all trajectories and nominal trajectory
+    figure; view(3); hold on; grid on; axis equal;
+    
+    plot3(rollout_x_nom(1, :), rollout_x_nom(2, :), rollout_x_nom(3, :), 'k--', 'LineWidth', 2);
+
+    for i = 1:length(trajectories)
+        plot3(trajectories{i}(1, :), trajectories{i}(2, :), trajectories{i}(3, :), 'b-', 'LineWidth', 0.5);
+        plot3(trajectories{i}(1, 1), trajectories{i}(2, 1), trajectories{i}(3, 1), 'sg');
+    end
+    
+    plot3(complete_x_nom(1, :), complete_x_nom(2, :), complete_x_nom(3, :), 'k--', 'LineWidth', 2);
+    
+    % %plot an ellipse from which initial states are sampled
+    % ellipse_center = rollout_x_nom(1:2,1); % 2D center of the ellipsoid
+    % cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
+    % [eig_vec, eig_val] = eig(cov_2d);
+    % 
+    % theta = linspace(0, 2*pi, 100); % Parameterize ellipse
+    % %mu + 3*sigma will cover 99.7% of the distribution
+    % %std dev, sigma = sqrt(covariance)
+    % ellipse_boundary = 3*eig_val^(1/2) * [cos(theta); sin(theta)];
+    % rotated_ellipse = eig_vec * ellipse_boundary;
+    % 
+    % plot(ellipse_center(1) + rotated_ellipse(1, :), ...
+    %      ellipse_center(2) + rotated_ellipse(2, :), ...
+    %      'k-.', 'LineWidth', 1.2);
+
+    xlabel('p_x'); ylabel('p_y'); zlabel('p_z');
+    title('Monte Carlo Rollout Trajectories');
+    legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
+    %hold off;
+end
+
 function plot_input_profiles(input_profiles, rollout_time_instances, complete_u_nom, complete_time_instances)
     % Plot all trajectories and nominal trajectory
     figure;
     
-    subplot(2,1,1)
-    hold on;
-    grid on; 
-    for i = 1:length(input_profiles)
-        plot(rollout_time_instances, input_profiles{i}(1, :), 'b-', 'LineWidth', 0.5);
-    end
-    plot(complete_time_instances, complete_u_nom(1, :), 'k--', 'LineWidth', 2);
-    xlabel('time'); ylabel('u_1');
-    title('Input history from Monte Carlo Rollouts');
-    
-    subplot(2,1,2)
-    hold on;
-    grid on; 
-    for i = 1:length(input_profiles)
-        plot(rollout_time_instances, input_profiles{i}(2, :), 'b-', 'LineWidth', 0.5);
-    end
-    plot(complete_time_instances, complete_u_nom(2, :), 'k--', 'LineWidth', 2);
+    m = size(complete_u_nom,1);
+    for i=1:m
+        subplot(m,1,i)
+        hold on; grid on; 
+        for j = 1:length(input_profiles)
+            plot(rollout_time_instances, input_profiles{j}(i, :), 'b-', 'LineWidth', 0.5);
+        end
+        plot(complete_time_instances, complete_u_nom(i, :), 'k--', 'LineWidth', 2);
+        xlabel('time'); ylabel(sprintf('u_{%d}', i))
 
-    xlabel('time'); ylabel('u_2');
-    %legend('Sample Trajectories', 'Initial states', 'Nominal Trajectory', '');
+        if i==1
+            title('Input history from Monte Carlo Rollouts');
+        end
+    end
 end
 
 % Plot error and cost metrics over time
@@ -273,65 +307,3 @@ function plot_error_metrics(errors, costs, time)
     xlabel('Time (s)'); ylabel('Weighted Cost');
     title('Mean of Cost-to-Goal Metric Over Time');
 end
-
-% % Function to plot a pentagon representing a car at position (x, y) with orientation theta.
-% function plot_pentagon_car(pose)
-% 
-%     x = pose(1); y = pose(2); theta = pose(3) - pi/2;
-%     % Pentagon vertices in local coordinates (centered at origin)
-%     pentagon_local = [
-%         0,  0.5;  % Front vertex
-%         -0.3, 0.2; % Front-left
-%         -0.3, -0.3; % Rear-left
-%         %0, -0.5;  % Rear
-%         0.3, -0.3; % Rear-right
-%         0.3, 0.2;  % Front-right (connect back to front-left)
-%     ]';
-% 
-%     % Rotation matrix for orientation theta
-%     R = [cos(theta), -sin(theta); 
-%          sin(theta),  cos(theta)];
-% 
-%     % Scale, Rotate and translate the pentagon
-%     scaling = 0.5;
-%     pentagon_world = scaling * R * pentagon_local + [x; y];
-% 
-%     % Plot the pentagon
-%     fill(pentagon_world(1, :), pentagon_world(2, :), 'w', 'EdgeColor', 'k', 'LineWidth', 1.5);
-%     hold on;
-%     axis equal;
-% 
-%     % Add a marker for the center position
-%     plot(x, y, 'ro', 'MarkerSize', 3, 'MarkerFaceColor', 'r');
-% end
-
-% function plot_funnel(complete_x_nom, covariance)
-%     % Plot all trajectories and nominal trajectory
-%     %figure;
-%     hold on;
-%     grid on; 
-%     axis equal;
-% 
-%     plot(complete_x_nom(1, :), complete_x_nom(2, :), 'k--', 'LineWidth', 2);
-%     %plot_pentagon_car(x_nom(:,end)); %final pose
-% 
-%     %plot an ellipse from which initial states are sampled
-%     ellipse_center = complete_x_nom(1:2,1); % 2D center of the ellipsoid
-%     cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
-%     [eig_vec, eig_val] = eig(cov_2d);
-% 
-%     theta = linspace(0, 2*pi, 100); % Parameterize ellipse
-%     %mu + 3*sigma will cover 99.7% of the distribution
-%     %std dev, sigma = sqrt(covariance)
-%     ellipse_boundary = 3*eig_val^(1/2) * [cos(theta); sin(theta)];
-%     rotated_ellipse = eig_vec * ellipse_boundary;
-% 
-%     plot(ellipse_center(1) + rotated_ellipse(1, :), ...
-%          ellipse_center(2) + rotated_ellipse(2, :), ...
-%          'k-.', 'LineWidth', 1.2);
-% 
-%     xlabel('p_x'); ylabel('p_y');
-%     title('A forward reachable invariant set');
-%     %legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
-%     %hold off;
-% end

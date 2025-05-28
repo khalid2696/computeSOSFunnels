@@ -3,7 +3,7 @@ clc; clearvars; close all
 % Quadrotor Parameters
 quadParameters.m = 0.5;        % mass (kg)
 quadParameters.g = 9.81;       % gravity (m/s^2)
-quadParameters.J = [4.856e-3, 4.856e-3, 8.801e-3]; % moment of inertia (kg⋅m^2)
+quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
 
 % State variables
 syms px py pz vx vy vz phi theta psi p q r real
@@ -16,7 +16,7 @@ u = [T Mp Mq Mr];
 %fn handle for the dynamics
 quad_dynamics = @(x, u) quadrotor_dynamics(x, u, quadParameters);
 
-f = quadrotor_dynamics(x, u, quadParameters);
+f = quadrotor_dynamics(x, u, quadParameters)
 
 % Jacobian with respect to state
 A = jacobian(f, x);

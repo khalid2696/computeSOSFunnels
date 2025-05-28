@@ -10,6 +10,11 @@ clc; clearvars; close all;
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
 finalPose   = [0; -3; 2; 0; 0; 0];   % desired final pose
 
+%% Specify Quadrotor Parameters (not defining these will result in an error)
+quadParameters.m = 0.5;        % mass (kg)
+quadParameters.g = 9.81;       % gravity (m/s^2)
+quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
+
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 5;
@@ -20,10 +25,10 @@ run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
 %% for debugging
-load('./precomputedData/nominalTrajectory.mat');
-time_instances(end)
+%load('./precomputedData/nominalTrajectory.mat');
+%time_instances(end)
 %x_nom(:,1)'
-x_nom(:,end)'
+%x_nom(:,end)'
 
 keyboard
 %% Design a time-varying LQR feedback controller
@@ -40,13 +45,15 @@ terminalRegionScaling = 10; % Terminal constraint cost
 run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
-%% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
-%startTimeIndex = 1; %start time for the rollouts
-%initial_state_covariance = (1/3)*(M(:,:,1)/rhoGuess(1))^(-1/2); %specify the covariance for sampling initial states
-%run("./utils/checkClosedLoop_usingMCRollouts.m");
+% for debugging
+load('./precomputedData/LQRGainsAndCostMatrices.mat');
+keyboard
 
-% Or, alternatively visualise the flow field of the closed loop system 
-%run("./utils/visualise_flowField.m");
+%% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
+startTimeIndex = 1; %start time for the rollouts
+%startMaxPerturbation = 0.2; %a measure of max initial perturbations to state
+                         %decrease this for a smaller initial set
+run("./utils/checkClosedLoop_MCRollouts.m");
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
