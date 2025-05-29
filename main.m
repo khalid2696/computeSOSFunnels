@@ -5,6 +5,9 @@ clc; clearvars; close all;
 %WARNING: Will have to use the same variable names as below if we want to
 %         pass onto the corresponding scripts
 
+%% Add directories
+addpath('./lib/');
+
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
@@ -50,6 +53,8 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 keyboard
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
+
+clc; close all;
 startTimeIndex = 1; %start time for the rollouts
 %startMaxPerturbation = 0.2; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
@@ -65,13 +70,15 @@ disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Load all the saved files for further analysis
 
-%clearvars;
+clearvars; close all; 
+addpath('./lib/');
 
-%load('./precomputedData/nominalTrajectory.mat');
-%load('./precomputedData/LQRGainsAndCostMatrices.mat');
+load('./precomputedData/nominalTrajectory.mat');
+load('./precomputedData/LQRGainsAndCostMatrices.mat');
 %load('./precomputedData/deviationDynamics.mat');
 
-%plotOneLevelSet(x_nom, P);
+plotOneLevelSet_2D(x_nom, P);
+plotOneLevelSet_3D(x_nom, P);
 
 %% Time-conditioned invariant set analysis (with time-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
@@ -121,51 +128,54 @@ run("./utils/plottingScript.m");
 
 %% Function definitions
 
-function plotOneLevelSet(x_nom, ellipsoidMatrix)
-    figure
-    hold on;
-    grid on; 
-    axis equal;
+function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
+    figure; hold on; grid on; axis equal;
+
+    P = plottingFnsClass();
     
+    projectionDims = [1 2];
+
+    %plot ellipsoidal invariant sets in 2D
     for k=1:1:length(x_nom)
         M = ellipsoidMatrix(:,:,k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
-        plotEllipse(center, M_xy)
+        M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
+        %center = x_nom(:,k);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
+        %plotEllipse(center, M_xy);
+        P.plotEllipse(center, M_xy);
     end 
     
+    %nominal trajectory
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
+
+    %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
     xlabel('p_x');
     ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
 end
 
-function M_2d = project_ellipsoid_matrix(M, projection_dims)
-    % Input:
-    % M: nxn matrix defining the n-dimensional ellipsoid x^T M x < 1
-    % projection_dims: 2-element vector specifying which dimensions to project onto
-    %                  (e.g., [1 2] for xy-plane, [1 3] for xz-plane)
-    
-    n = size(M, 1); %get the dimensionality of matrix M
+function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
+    figure; view(3);
+    hold on; grid on; axis equal;
 
-    basisMatrix = zeros(n,2);
-    basisMatrix(projection_dims(1),1) = 1;
-    basisMatrix(projection_dims(2),2) = 1;
+    P = plottingFnsClass();
 
-    M_2d = inv(basisMatrix' *inv(M) * basisMatrix);
-end
+    projectionDims = [1 2 3];
+    
+    %plot ellipsoidal invariant sets in 3D
+    for k=1:1:length(x_nom)
+        M = ellipsoidMatrix(:,:,k);
+        M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
+        P.plotEllipsoid(center, M_xyz);
+    end 
+    
+    %nominal trajectory
+    plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
 
-function plotEllipse(center, ellipseMatrix)
-    
-    %plot an ellipse from which initial states are sampled
-    ellipseCenter = center(1:2); % 2D center of the ellipsoid
-    [eig_vec, eig_val] = eig(ellipseMatrix);
-    
-    theta = linspace(0, 2*pi, 100); % Parameterize ellipse
-    ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
-    rotated_ellipse = eig_vec * ellipse_boundary;
-    
-    plot(ellipseCenter(1) + rotated_ellipse(1, :), ...
-         ellipseCenter(2) + rotated_ellipse(2, :), ...
-         '-k', 'LineWidth', 1.2);  
+    %formatting
+    title('1-level set of cost-to-go matrices P, along the nominal trajectory');
+    xlabel('p_x');
+    ylabel('p_y');
+    zlabel('p_z');
 end

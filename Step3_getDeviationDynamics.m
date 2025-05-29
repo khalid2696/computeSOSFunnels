@@ -17,6 +17,7 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 % K              : Feedback gains (sampled)      : n_u x n_x x N
 % P              : cost-to-goal matrix (sampled) : n_x x n_x x N
 % dynamicsFnHandle : the function handle of the system dynamics
+% f_sym          : system dynamics, f in terms of symbolic x and u: f(x,u) = xdot
 
 %Note: cost-to-go matrices, P will be used for candidate Lyapunov functions
 
@@ -36,16 +37,7 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 %respective dimensionality
 x = createSymbolicVector('x', n); %state vector
 u = createSymbolicVector('u', m); %input vector
-%x = [x1 x2 x3]'; u = [u1 u2]'; %column matrix by convention -- nx1
-
-keyboard
-
-% Define the system dynamics: x_dot = f(x, u)
-symbolicDynamics = [
-    u(1) * cos(x(3));   % x_dot
-    u(1) * sin(x(3));   % y_dot
-    u(2);               % theta_dot
-];
+%x = [x1 x2 ... xn]'; u = [u1 u2 .. um]'; %column matrix by convention
 
 %define the variables on which the function depends
 symVars = [x; u]; %f(x,u) := f(vars)
@@ -53,28 +45,28 @@ symVars = [x; u]; %f(x,u) := f(vars)
 % Define symbolic expansion point
 expansion_point_varSymbol = 'a';
 expansion_point_a_symbolic = createSymbolicVector(expansion_point_varSymbol, length(symVars));
-%expansion_point_a_symbolic = [a1 a2 a3 a4 a5]'; %column matrix by convention -- nx1
+%expansion_point_a_symbolic = [a1 a2 a3 .. a(n+m)]'; %column matrix by convention -- nx1
 
-order = 3;
+order = 2;
 disp('Hang on..')
 disp(['Polynomializing the system dynamics using Taylor expansion of order ' num2str(order)]);
 disp(' ');
 
-%taylor_approx = taylor_expansion(symbolicDynamics, symVars, expansion_point_a_symbolic, order);
+taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
 % this expression will be in terms of vars and expansion point_a
 
-%pre-computed for uniycle dynamics (for quicker debugging)!!
-%lines: 67--75
+%pre-computed polynomial-approximated dynamics (for quicker debugging)!!
+%lines: 69--77
 
 %re-assigning variables for ease of usage
-x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
-a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
-a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
-
-taylor_approx = ...
-[a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
- a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-                                                                                                                                                                                   u2];
+% x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
+% a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
+% a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
+% 
+% taylor_approx = ...
+% [a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
+%  a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
+%                                                                                                                                                                                    u2];
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes
@@ -84,28 +76,33 @@ taylor_approx = ...
 
 disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
+
+systemPolyDynamics = cell(1,N);
 for k = 1:N %length of time samples
 
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
     expansion_point_a_numeric = [nom_state' nom_input'];
 
-    sym_polyDynamics_at_a = get_expansion_at_point(taylor_approx, 'a', expansion_point_a_numeric);
+    sym_polyDynamics_at_a = get_expansion_at_point(taylor_approx, expansion_point_varSymbol, expansion_point_a_numeric);
     sym_polyDynamics_at_a = vpa(sym_polyDynamics_at_a, 4); %cleanup upto 4 decimal places
 
     systemPolyDynamics{k} = sym_polyDynamics_at_a;
 end
 
+%keyboard
+
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
 % Converting expression from syms to pvar (to use SOSTOOLS functionalities)
-pvar x1 x2 x3
-xbar = [x1 x2 x3]'; %deviations --> nx1 vector
+pvar x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
+xbar = [x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12]'; %deviations --> nx1 vector
 %xbar: pvar variables referring to state deviations *off* the nominal state 
 
 disp('Computing state deviation dynamics at each nominal state-input pair');
 disp(' ');
 
+deviationDynamics = cell(1,N);
 for k = 1:N %length of time samples
     
     nom_state = x_nom(:, k);
@@ -117,7 +114,7 @@ for k = 1:N %length of time samples
     deviationDynamics{k} = computeDeviationDynamics(sym_polyDynamics_at_a, symVars, xbar, nom_state, nom_input, controlGainMatrix);
     
     %checking whether at zero deviation, deviation dynamics fn value is zero
-    check = subs(deviationDynamics{k}, xbar, zeros(size(xbar)));
+    check = subs(deviationDynamics{k}, xbar, zeros(size(xbar)))
     if (norm(double(check)) ~= 0)
         disp('At zero deviation, deviation dynamics fn value is NOT zero. Check it!');
     end
@@ -134,8 +131,18 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     
     % computing xdot = f value at the nominal state and input values
     nomStateInputVals = [x_nom' u_nom'];
-    fVal_at_nomStateInput = subs(taylor_approx_at_a,[symVars(1) symVars(2) symVars(3) symVars(4) symVars(5)], nomStateInputVals);
-    fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6); %cleanup upto 4 decimal places
+    
+    fVal_at_nomStateInput = taylor_approx_at_a;
+    for i=1:length(nomStateInputVals)
+        fVal_at_nomStateInput = subs(fVal_at_nomStateInput, symVars(i), nomStateInputVals(i));
+    end
+    fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6); %cleanup upto 6 decimal places
+    
+    % Previous implementation of the above lines of code (prolly a bit naive)
+    % fVal_at_nomStateInput = subs(taylor_approx_at_a,[symVars(1) symVars(2) symVars(3) symVars(4) symVars(5) ...
+    %                                 symVars(6) symVars(7) symVars(8) symVars(9) symVars(10) symVars(11) ...
+    %                                 symVars(12) symVars(13) symVars(14) symVars(15) symVars(16)], nomStateInputVals);
+    % fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6) %cleanup upto 6 decimal places
 
     state = x_nom + xBar_pvar; %nominal state + deviation
     input = u_nom - controlGainMatrix*xBar_pvar;
@@ -183,11 +190,16 @@ function taylor_approx = taylor_expansion(f, vars, a, order)
     % Iterate over each term in the vector-valued function f
     for i = 1:length(f)
 
+        i
+
         % Initialize the Taylor expansion for the i-th component
         f_i_taylor = subs(f(i), vars, a); % Zeroth-order term (f(a))
         
         % Add higher-order terms iteratively
         for k = 1:order
+            
+            k
+
             term = 0; % Initialize the term of order k
             
             % Iterate over all multi-index combinations for the current order

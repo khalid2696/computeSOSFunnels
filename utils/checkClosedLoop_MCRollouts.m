@@ -47,8 +47,9 @@ rho = rho0*exp(c*(t_start-t0)/(t0-tf));
 
 %Sampling initial states from an initial ellipsoidal set
 if ~exist('initial_state_covariance', 'var')
-    %initial_state_covariance = rho*diag([0.25, 0.25, 0.1]);
-    initial_state_covariance = rho*P(:,:,startTimeIndex)^(-1/2);
+    initial_state_covariance = (1/3)*rho*P(:,:,startTimeIndex)^(-1/2);
+    %mu + 3*sigma will cover 99.7% of the distribution
+    %hence divided by 3
 end
 
 %1/sqrt(eigenvalue of P_k) gives the length of each semi-axis

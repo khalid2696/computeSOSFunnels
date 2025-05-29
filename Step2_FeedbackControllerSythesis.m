@@ -74,7 +74,8 @@ disp('Finished synthesizing a time-varying LQR stabilizing feedback controller')
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P');
+f_sym = f;
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P' , 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
