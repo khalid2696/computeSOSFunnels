@@ -157,6 +157,7 @@ run("./utils/plottingScript.m");
 %% Function definitions
 
 % Define the system dynamics: quadrotor model
+% Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
 function f = quadrotor_dynamics(x, u, quadParameters)
     % Numerical version with specific parameter values
     
