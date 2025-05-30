@@ -11,7 +11,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [0; -3; 2; 0; 0; 0];   % desired final pose
+finalPose   = [-2; 4; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.5;        % mass (kg)
@@ -37,26 +37,58 @@ keyboard
 %% Design a time-varying LQR feedback controller
 
 %Cost matrices
-Q = 0.5*diag([10, 10, 1]); % State cost
-R = 0.5*diag([1, 0.1]); % Control cost
+% State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
+Q = 0.1*diag([
+    50,  50,  50, ...   % Position weights [px, py, pz] - high for tracking
+    5,   5,   5,  ...   % Velocity weights [vx, vy, vz] - moderate
+    10,   10,   10,  ...   % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+    1,    1,    1  ]);     % Angular rate weights [p, q, r] - low, let inner loop handle
+
+% Q_aggressive = diag([200, 200, 200, 20, 20, 20, 80, 80, 10, 2, 2, 2]);
+% R_conservative = diag([0.05, 20, 20, 30]);
+
+% Control order: [T; Mx; My; Mz]
+R = diag([
+    1, ...    % Thrust - relatively low, thrust is "cheap"
+    30,  ...    % Roll moment Mx - higher, moments are more "expensive"
+    30,  ...    % Pitch moment My
+    20  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
+
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
 terminalRegionScaling = 10; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
 
+% Tuning guidelines:
+% For better position tracking:
+% 
+% Increase position weights (px, py, pz): 100 to 200
+% Increase velocity weights if oscillations occur: 10 to 20
+% 
+% For smoother control:
+% 
+% Increase R values (especially moments): Mx, My from 10 to 50
+% Decrease attitude weights if too aggressive: 50 to 20
+% 
+% Physical reasoning:
+% 
+% Position weights (100): High because position tracking is primary objective
+% Attitude weights (50, 50, 20): Roll/pitch couple to xy-position, so weighted higher than yaw
+% Thrust weight (0.1): Low because thrust changes are energetically cheap
+% Moment weights (10, 10, 20): Higher because moments require more energy and we want smooth attitude control
+
 run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
-keyboard
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
 clc; close all;
 startTimeIndex = 1; %start time for the rollouts
-%startMaxPerturbation = 0.2; %a measure of max initial perturbations to state
+startMaxPerturbation = 1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
 
@@ -70,7 +102,7 @@ disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; close all; 
+clearvars; close all; clc
 addpath('./lib/');
 
 load('./precomputedData/nominalTrajectory.mat');

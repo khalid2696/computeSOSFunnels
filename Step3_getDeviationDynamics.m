@@ -45,28 +45,19 @@ symVars = [x; u]; %f(x,u) := f(vars)
 % Define symbolic expansion point
 expansion_point_varSymbol = 'a';
 expansion_point_a_symbolic = createSymbolicVector(expansion_point_varSymbol, length(symVars));
-%expansion_point_a_symbolic = [a1 a2 a3 .. a(n+m)]'; %column matrix by convention -- nx1
+%expansion_point_a_symbolic = [a1 a2 .. a(n+m)]'; %column matrix by convention -- (n+m)x1
 
-order = 2;
+order = 3;
 disp('Hang on..')
 disp(['Polynomializing the system dynamics using Taylor expansion of order ' num2str(order)]);
 disp(' ');
 
-taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
+%taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
 % this expression will be in terms of vars and expansion point_a
 
-%pre-computed polynomial-approximated dynamics (for quicker debugging)!!
-%lines: 69--77
-
-%re-assigning variables for ease of usage
-% x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
-% a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
-% a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
-% 
-% taylor_approx = ...
-% [a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-%  a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-%                                                                                                                                                                                    u2];
+%pre-computed polynomial-approximated dynamics (for quicker results)!!
+%variable name: taylor_approx (symbolic - nx1 matrix)
+load('./precomputedData/taylorApproxDynamicsSym.mat');
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes
@@ -114,7 +105,7 @@ for k = 1:N %length of time samples
     deviationDynamics{k} = computeDeviationDynamics(sym_polyDynamics_at_a, symVars, xbar, nom_state, nom_input, controlGainMatrix);
     
     %checking whether at zero deviation, deviation dynamics fn value is zero
-    check = subs(deviationDynamics{k}, xbar, zeros(size(xbar)))
+    check = subs(deviationDynamics{k}, xbar, zeros(size(xbar)));
     if (norm(double(check)) ~= 0)
         disp('At zero deviation, deviation dynamics fn value is NOT zero. Check it!');
     end

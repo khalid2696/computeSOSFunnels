@@ -1,4 +1,4 @@
-clc; clearvars; close all
+%clc; clearvars; close all
 
 %% Add directories
 addpath('./lib/');
@@ -34,11 +34,11 @@ end
 %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%
 
 if ~exist('Q','var')
-    Q = eye(12); % State cost
+    Q = eye(size(x_nom,1)); % State cost
 end
 
 if ~exist('R','var')
-    R = eye(4); % Control cost
+    R = eye(size(u_nom,1)); % Control cost
 end
 
 if ~exist('terminalRegionScaling','var')

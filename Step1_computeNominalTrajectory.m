@@ -1,7 +1,8 @@
 %clc; clearvars; close all
 %yalmip('clear');
 
-disp('Hang on.. computing nominal trajectory using direct collocation-based trajectory optimisation');
+disp('Hang on..');
+disp('Computing nominal trajectory using direct collocation trajectory optimisation');
 disp(' ');
 
 % Quadrotor behavior:
