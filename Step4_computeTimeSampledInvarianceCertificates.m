@@ -1,4 +1,4 @@
-%clc; clearvars; close all
+clc; clearvars; close all
 
 warning('off','MATLAB:singularMatrix');
 
@@ -32,14 +32,14 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 % 1. Parameters pertaining to SOS Programming
 options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
                           %options -- mosek/sedumi
-multiplierPolyDeg = 6; %polynomial multiplier of predefined degree
+multiplierPolyDeg = 2; %polynomial multiplier of predefined degree
 LyapunovFnDeg = 2;     %quadratic Lyapunov function
 tolerance = 1e-6;
 convergenceTolerance = 1e-2; %if less than 1 percent change
 
 % 2. Parameters pertaining to Alternation Scheme (SCP) -- feasibility step and optimisation step             
 if ~exist('maxIter','var')
-    maxIter = 3; %maximum number of iterations
+    maxIter = 1; %maximum number of iterations
 end
 rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
@@ -50,18 +50,17 @@ startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
                     %decrease if computed funnel is weirdly shaped
 goalScaling = 0.8;  %Keep it less than 1
 
-
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % can include a binary search to determine a good initial guess -- between 0 and 1
 
 if ~exist('rhoGuessChoice','var')
-    rhoGuessChoice = 'const'; %options: 'const' or 'exp' (if const doesn't work out)
+    rhoGuessChoice = 'exp'; %options: 'const' or 'exp' (if const doesn't work out)
 end 
 
 % Option1: constant rho_guess -- rhoGuessChoice = 'const'
 %[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
 if ~exist('rhoInitialGuessConstant','var')
-    rhoInitialGuessConstant = 0.4;
+    rhoInitialGuessConstant = 1;
 end 
 
 % Option2: Exponentially (quickly) increasing rho_guess -- rhoGuessChoice = 'exp'
@@ -71,7 +70,7 @@ end
 
 %[TUNEABLE] increase value if initial guess fails                         
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 1.5;
+    rhoInitialGuessExpCoeff = 2.5;
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -98,6 +97,7 @@ plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
 title('Initial guess funnel');
 plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
 plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
@@ -117,7 +117,7 @@ else
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-%keyboard
+keyboard
 
 %% Alternation Loop -- proceed if we're able to get a feasible initial guess
 
@@ -487,7 +487,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         
     end
 
-    rhoGuess(end) = 1;
+    %rhoGuess(end) = 1;
 
 end
 

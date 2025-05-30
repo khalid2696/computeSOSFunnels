@@ -51,7 +51,7 @@ R = diag([
     20  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 10; % Terminal constraint cost
+terminalRegionScaling = 20; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
