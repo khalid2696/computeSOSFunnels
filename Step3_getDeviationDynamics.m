@@ -91,9 +91,10 @@ end
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
 % Converting expression from syms to pvar (to use SOSTOOLS functionalities)
-pvar x1 x2 x3 x4
-xbar = [x1 x2 x3 x4]'; %deviations --> nx1 vector
+%pvar x1 x2 x3 x4
+%xbar = [x1 x2 x3 x4]'; %deviations --> nx1 vector
 %xbar: pvar variables referring to state deviations *off* the nominal state 
+xbar = createPvarVector('x', n);
 
 disp('Computing state deviation dynamics at each nominal state-input pair');
 disp(' ');
@@ -249,4 +250,17 @@ function sym_vector = createSymbolicVector(vecSymbol, n)
     sym_vector = sym(varNames, 'real');
 
     sym_vector = sym_vector'; %column matrix by convention -- nx1
+end
+
+function pvar_vector = createPvarVector(vecSymbol, n)
+    var_names = arrayfun(@(i) [vecSymbol num2str(i)], 1:n, 'UniformOutput', false);
+    var_string = strjoin(var_names, ' ');
+    
+    % Create pvar in caller workspace
+    evalin('caller', ['pvar ' var_string]);
+    
+    % Create the vector in caller workspace and return it
+    evalin('caller', ['temp_pvar_vector = [' strjoin(var_names, '; ') '];']);
+    pvar_vector = evalin('caller', 'temp_pvar_vector');
+    evalin('caller', 'clear temp_pvar_vector'); % clean up
 end
