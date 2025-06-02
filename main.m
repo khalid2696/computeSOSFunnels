@@ -29,7 +29,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 maxTimeHorizon = 10;
 numTimeSteps = 50;         % number of time samples
 
-drawFlag = 1; % 1: if you want to plot results, 0: otherwise
+drawFlag = 0; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -38,20 +38,21 @@ load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
 
-keyboard;
 %% Design a time-varying LQR feedback controller
 
 %Cost matrices
-% State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-%Q = ;
-%R = ;
-%terminalRegionScaling = 10;
+% State order: [px; vx; theta; omega]
+Q = diag([5, 0.1, 10, 0.1]);
+R = 0.1;
+terminalRegionScaling = 20;
+
 run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
 %load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
+keyboard;
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
 close all;
@@ -62,7 +63,7 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; close all;
+clearvars; %close all;
 addpath('./lib/');
 
 load('./precomputedData/nominalTrajectory.mat');
@@ -190,28 +191,28 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     ylabel('\theta');
 end
 
-function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
-    figure; view(3);
-    hold on; grid on; %axis equal;
-
-    P = plottingFnsClass();
-
-    projectionDims = [1 2 3];
-    
-    %plot ellipsoidal invariant sets in 3D
-    for k=1:1:length(x_nom)
-        M = ellipsoidMatrix(:,:,k);
-        M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
-        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
-        P.plotEllipsoid(center, M_xyz);
-    end 
-    
-    %nominal trajectory
-    plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
-
-    %formatting
-    title('1-level set of cost-to-go matrices P, along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('v_x');
-    zlabel('\theta');
-end
+% function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
+%     figure; view(3);
+%     hold on; grid on; %axis equal;
+% 
+%     P = plottingFnsClass();
+% 
+%     projectionDims = [1 2 3];
+% 
+%     %plot ellipsoidal invariant sets in 3D
+%     for k=1:1:length(x_nom)
+%         M = ellipsoidMatrix(:,:,k);
+%         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
+%         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
+%         P.plotEllipsoid(center, M_xyz);
+%     end 
+% 
+%     %nominal trajectory
+%     plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
+% 
+%     %formatting
+%     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
+%     xlabel('p_x');
+%     ylabel('v_x');
+%     zlabel('\theta');
+% end

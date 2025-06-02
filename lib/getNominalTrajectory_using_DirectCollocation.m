@@ -2,8 +2,8 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N, cartPoleParameters)
 
     %% Optimization parameters - cost function and state/input constraints
-    timeHorizon_weight = 1.0;      % Weight for minimizing time
-    controlEffort_weight = 0.01;   % Weight for control effort (lower than quad since 1D control)
+    timeHorizon_weight = 1;      % Weight for minimizing time
+    controlEffort_weight = 0.01;   % Weight for control effort
     
     % State constraints
     cartPosition_limits = [-3.0, 3.0];     % Cart position bounds (m)
@@ -60,7 +60,8 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     constraints = [constraints, X(2, :) <= cartVelocity_limits(2)];
     
     % Pendulum angle: no explicit limits (allow full rotation for swing-up)
-    % But could add: constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi];
+    % But could add: 
+    constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi];
     
     % Angular velocity limits
     constraints = [constraints, pendulum_angularVel_limits(1) <= X(4, :)];
