@@ -54,10 +54,13 @@ disp(' ');
 
 %taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
 % this expression will be in terms of vars and expansion point_a
+%INDEPENDENT of the hyper-parameters used in traj optimisation or feedback controller synthesis 
+%DEPENDENT only on system dynamics f, and the parameters in the mathematical equations of f.
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
 load('./precomputedData/taylorApproxDynamicsSym.mat');
+
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes

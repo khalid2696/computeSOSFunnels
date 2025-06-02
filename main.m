@@ -48,7 +48,7 @@ R = diag([
     1, ...    % Thrust - relatively low, thrust is "cheap"
     30,  ...    % Roll moment Mx - higher, moments are more "expensive"
     30,  ...    % Pitch moment My
-    20  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
+    50  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
 terminalRegionScaling = 20; % Terminal constraint cost
@@ -80,6 +80,7 @@ disp('- - - - - - -'); disp(" ");
 % for debugging
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
+keyboard;
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
 close all;
@@ -90,7 +91,7 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; close all;
+clearvars; %close all;
 addpath('./lib/');
 
 load('./precomputedData/nominalTrajectory.mat');
