@@ -1,189 +1,148 @@
 function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
-getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, N, quadParameters)
+    getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N, cartpole_params)
 
-    %% Optimisation parameters - cost function and state/input constraints
-    timeHorizon_weight = 2;
-    controlEffort_weight = 0.1;
+    %% Optimization parameters - cost function and state/input constraints
+    timeHorizon_weight = 1.0;      % Weight for minimizing time
+    controlEffort_weight = 0.01;   % Weight for control effort (lower than quad since 1D control)
     
-    %state constraints
-    rollSaturation = [-pi/3 pi/3]; %small roll and pitch angles
-    pitchSaturation = [-pi/3 pi/3];
-    yawSaturation = [-pi/6 pi/6]; %heading angle
-
-    %input saturations
-    thrustSaturation = [0 15];
-    momentSaturation = [-2.5 2.5];
+    % State constraints
+    cartPosition_limits = [-3.0, 3.0];     % Cart position bounds (m)
+    cartVelocity_limits = [-5.0, 5.0];     % Cart velocity bounds (m/s)
+    pendulum_angularVel_limits = [-15, 15]; % Angular velocity bounds (rad/s)
     
-    %% extracting quadrotor model parameters
-    m = quadParameters.m; g = quadParameters.g;
+    % Input constraints  
+    force_limits = [-20, 20];  % Horizontal force limits (N)
     
-    %% Define Decision variables 
-    T = sdpvar(1); %for time horizon
-    dt = T / (N-1); % Adaptive time step
+    %% Extract cartpole model parameters
+    M = cartpole_params.M;  % Cart mass
+    m = cartpole_params.m;  % Pendulum mass
+    L = cartpole_params.L;  % Pendulum length
+    g = cartpole_params.g;  % Gravity
     
-    % State Variables: [pos, vel, attitude, omega]
-    X = sdpvar(12, N); % Position (3), velocity (3), Euler angles (3), angular velocity (3)
-    U = sdpvar(4, N); % Thrust (1) and torques (3)
+    %% Define Decision Variables
+    T = sdpvar(1);              % Variable time horizon
+    dt = T / (N-1);             % Adaptive time step
+    
+    % State Variables: [x, x_dot, theta, theta_dot]
+    X = sdpvar(4, N);           % Cart position, velocity, pendulum angle, angular velocity
+    U = sdpvar(1, N);           % Horizontal force on cart
     
     %% Constraints and Objective
-    constraints = [0.1 <= T, T <= T_max]; % Time horizon bounds
-    cost = timeHorizon_weight * T; % Penalize total time taken
+    constraints = [0.5 <= T, T <= T_max];  % Time horizon bounds
+    cost = timeHorizon_weight * T;          % Penalize total time
     
-    % Objective cost
+    % Add control effort to cost
     for k = 1:N-1
-        % Cost function: time + tracking error + control effort
-        %cost = cost + norm(X(1:3, k) - pf, 2)^2 + 0.1 * norm(U(:, k), 2)^2;
-        
-        %cost function: time + control effort
-        cost = cost + controlEffort_weight * norm(U(:, k), 2)^2;
+        cost = cost + controlEffort_weight * U(k)^2;
     end
     
-    % Dynamics constraints (collocation)
+    %% Dynamics Constraints (Collocation)
     for k = 1:N-1
         xk = X(:, k);
-        uk = U(:, k);
+        uk = U(k);
         
-        % Compute nonlinear dynamics
-        f_k = quadrotor_dynamics(xk, uk);
-        f_k_next = quadrotor_dynamics(X(:, k+1), uk);
-    
-        %x_next = xk + dt*f_k; %Euler integration
-        x_next = xk + (dt/2) * (f_k + f_k_next); %trapezoidal integration
+        % Compute nonlinear dynamics at current and next points
+        f_k = cartpole_dynamics(xk, uk);
+        f_k_next = cartpole_dynamics(X(:, k+1), U(k));
         
         % Trapezoidal integration with variable time step
+        x_next = xk + (dt/2) * (f_k + f_k_next);
+        
         constraints = [constraints, X(:, k+1) == x_next];
     end
     
+    %% Boundary Conditions
     % Initial and final state constraints
-    constraints = [constraints, X(:,1) == x0, X(:,end) == xf];
+    constraints = [constraints, X(:, 1) == x0];
+    constraints = [constraints, X(:, end) == xf];
     
-    %state constraints
-    constraints = [constraints, 0 <= X(3,:)]; % height should be greater than zero
+    %% State Constraints
+    % Cart position limits
+    constraints = [constraints, cartPosition_limits(1) <= X(1, :)];
+    constraints = [constraints, X(1, :) <= cartPosition_limits(2)];
     
-    %small roll and pitch angles
-    constraints = [constraints, rollSaturation(1) <= X(7,:), X(7,:) <= rollSaturation(2)];
-    constraints = [constraints, pitchSaturation(1) <= X(8,:), X(8,:) <= pitchSaturation(2)];
-    %heading angle (yaw) constrained to not deviate too much from 'North'
-    constraints = [constraints, yawSaturation(1) <= X(9,:), X(9,:) <= yawSaturation(2)];
+    % Cart velocity limits  
+    constraints = [constraints, cartVelocity_limits(1) <= X(2, :)];
+    constraints = [constraints, X(2, :) <= cartVelocity_limits(2)];
     
+    % Pendulum angle: no explicit limits (allow full rotation for swing-up)
+    % But could add: constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi];
     
-    % Control input constraints -- thrust and moments 
-    % Rotor speeds can be computed using the mixer model with parameters: 
-    % thrust coefficient (k), counter-moment coefficient (d) and arm length (l)
-    constraints = [constraints, thrustSaturation(1) <= U(1,:), U(1,:) <= thrustSaturation(2)]; % Thrust
-    constraints = [constraints, momentSaturation(1) <= U(2:4,:), U(2:4,:) <= momentSaturation(2)]; % Torques
-    constraints = [constraints, U(1,end) == m*g]; %hover at terminal state
+    % Angular velocity limits
+    constraints = [constraints, pendulum_angularVel_limits(1) <= X(4, :)];
+    constraints = [constraints, X(4, :) <= pendulum_angularVel_limits(2)];
+    
+    %% Control Input Constraints
+    constraints = [constraints, force_limits(1) <= U];
+    constraints = [constraints, U <= force_limits(2)];
+    
+    % Terminal control constraint (balanced upright requires zero force)
+    constraints = [constraints, U(end) == 0];
+    
+    %% Additional Path Constraints (Optional)
+    % Smooth control - penalize control rate changes
+    % for k = 1:N-2
+    %     constraints = [constraints, (U(k+1) - U(k))^2 <= max_control_rate^2];
+    % end
     
     %% Solve using IPOPT
-    options = sdpsettings('solver', 'ipopt', 'verbose', 2);
+    options = sdpsettings('solver', 'ipopt', 'verbose', 1);
+    
+    % IPOPT-specific options for better convergence
+    options.ipopt.max_iter = 3000;
+    options.ipopt.tol = 1e-6;
+    options.ipopt.acceptable_tol = 1e-4;
+    
     diagnostics = optimize(constraints, cost, options);
     
-    %% Extract solutions
-    
+    %% Extract Solutions
     if diagnostics.problem == 0
-        %disp('Optimization successful!');
-        T_opt = value(T); %scalar - time
-        x_opt = value(X); %x,y,z,v_x,v_y,v_z,q0,q1,q2,q3,p,q,r
-        u_opt = value(U); %T, M_p, M_q, M_r
-    
-        time_instances_opt = linspace(0,T_opt,N); %may have to take transpose
+        fprintf('Cartpole trajectory optimization successful!\n');
+        
+        T_opt = value(T);
+        x_opt = value(X);  % [x; x_dot; theta; theta_dot] 
+        u_opt = value(U);  % [F] - horizontal force
+        time_instances_opt = linspace(0, T_opt, N);
         cost_opt = value(cost);
-        %samplingTime_opt = T_opt/(N-1); %sampling-time
-    
-    else %if the optimisation fails, assign NaN values for completeness    
-        time_instances_opt = NaN;
+        
+        % Display results
+        fprintf('Optimal time horizon: %.3f seconds\n', T_opt);
+        fprintf('Final cost: %.6f\n', cost_opt);
+        fprintf('Cart final position: %.3f m\n', x_opt(1, end));
+        fprintf('Pendulum final angle: %.3f rad (%.1f deg)\n', x_opt(3, end), rad2deg(x_opt(3, end)));
+        
+    else
+        % Optimization failed
+        fprintf('Cartpole trajectory optimization failed!\n');
+        fprintf('Solver status: %s\n', diagnostics.info);
+        
+        T_opt = NaN;
         x_opt = NaN;
         u_opt = NaN;
         time_instances_opt = NaN;
         cost_opt = NaN;
-        %samplingTime_opt = NaN;
-        %disp('Optimization failed!');
-        %disp(diagnostics.info);
     end
 end
 
-% % Quadrotor dynamics
-% function f = quadrotor_dynamics(x, u, quadParameters)
-%     % Numerical version with specific parameter values
-% 
-%     %extracting quadrotor model parameters
-%     m = quadParameters.m; g = quadParameters.g;
-%     Jxx = quadParameters.J(1); Jyy = quadParameters.J(2); Jzz = quadParameters.J(3);
-% 
-%     %assigning state variables for ease of usage
-%     % State: x = [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-% 
-%     %px = x(1); py = x(2); pz = x(3);
-%     vx = x(4); vy = x(5); vz = x(6);
-%     phi = x(7); theta = x(8); psi = x(9);
-%     p = x(10); q = x(11); r = x(12);
-% 
-%     %assigning input variables for ease of usage
-%     % Input: u = [T; Mx; My; Mz]
-%     T = u(1); Mp = u(2); Mq = u(3); Mr = u(4);
-% 
-%     % Trigonometric shortcuts
-%     c_phi = cos(phi); s_phi = sin(phi);
-%     c_theta = cos(theta); s_theta = sin(theta);
-%     c_psi = cos(psi); s_psi = sin(psi);
-%     t_theta = tan(theta);
-%     sec_theta = sec(theta);
-% 
-%     % Quadrotor dynamics 
-%     % Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
-%     f = [
-%         % Position derivatives
-%         vx;
-%         vy;
-%         vz;
-% 
-%         % Velocity derivatives
-%         (T/m) * (c_phi * s_theta * c_psi + s_phi * s_psi);
-%         (T/m) * (c_phi * s_theta * s_psi - s_phi * c_psi);
-%         (T/m) * c_phi * c_theta - g;
-% 
-%         % Euler angle derivatives
-%         p + q * s_phi * t_theta + r * c_phi * t_theta;
-%         q * c_phi - r * s_phi;
-%         q * s_phi * sec_theta + r * c_phi * sec_theta;
-% 
-%         % Angular velocity derivatives
-%         (Mp + (Jyy - Jzz) * q * r) / Jxx;
-%         (Mq + (Jzz - Jxx) * p * r) / Jyy;
-%         (Mr + (Jxx - Jyy) * p * q) / Jzz
-%     ];
-% end
+%% Helper function to create cartpole parameters structure
+function params = create_cartpole_params()
+    params.M = 1.0;    % Cart mass (kg)
+    params.m = 0.1;    % Pendulum mass (kg) 
+    params.L = 0.5;    % Pendulum length (m)
+    params.g = 9.81;   % Gravity (m/s^2)
+end
 
-
-% function xdot = quadrotor_dynamics_quat(x, u, m, g, J)
-%     % State variables
-%     p = x(1:3); % Position
-%     v = x(4:6); % Velocity
-%     q = x(7:10); % Quaternion
-%     omega = x(11:13); % Angular velocity
-% 
-%     % Control inputs
-%     T = u(1); % Thrust [N]
-%     tau = u(2:4); % Torques [N-m]
-% 
-%     % Quaternion components
-%     q0 = q(1); q1 = q(2); q2 = q(3); q3 = q(4);
-% 
-%     % Define the symbolic rotation matrix R(q)
-%     R = [1 - 2*(q3^2 + q2^2), 2*(q1*q2 - q0*q3), 2*(q1*q3 + q0*q2);
-%          2*(q1*q2 + q0*q3), 1 - 2*(q1^2 + q3^2), 2*(q2*q3 - q0*q1);
-%          2*(q1*q3 - q0*q2), 2*(q2*q3 + q0*q1), 1 - 2*(q1^2 + q2^2)];
-% 
-% 
-%     % Translational dynamics
-%     v_dot = [0; 0; -g] + (R * [0; 0; T]) / m;
-% 
-%     % Rotational dynamics
-%     omega_dot = J \ (tau - cross(omega, J * omega));
-% 
-%     % Quaternion derivative
-%     q_dot = 0.5 * quatmultiply(q', [0; omega]')';
-% 
-%     % Return full state derivative
-%     xdot = [v; v_dot; q_dot; omega_dot];
-% end
+%% Example usage function
+function demo_cartpole_optimization()
+    % Load cartpole dynamics
+    cartpole_dyn = cartpole_dynamics_numerical();  % From previous artifact
+    
+    % System parameters
+    params = create_cartpole_params();
+    
+    
+    if ~isnan(x_opt)
+        % Plot results
+        
+    end
+end

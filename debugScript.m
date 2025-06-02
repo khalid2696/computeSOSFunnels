@@ -1,77 +1,80 @@
-clc; clearvars; close all
 
-% Quadrotor Parameters
-quadParameters.m = 0.5;        % mass (kg)
-quadParameters.g = 9.81;       % gravity (m/s^2)
-quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
+% Parameters
+cartPoleParameters.M = 1.0;    % cart mass (kg)
+cartPoleParameters.m = 0.1;    % pendulum mass (kg)
+cartPoleParameters.L = 0.5;    % pendulum length (m)
+cartPoleParameters.g = 9.81;   % gravity (m/s^2)
 
-% State variables
-syms px py pz vx vy vz phi theta psi p q r real
-x = [px py pz vx vy vz phi theta psi p q r]';
+% Returns a numerical function handle for use in ODE solvers
+f_handle = @(x, u) cartpole_dynamics_fn(x, u, cartPoleParameters);
 
-% Control inputs
-syms T Mp Mq Mr real
-u = [T Mp Mq Mr];
+% Example: Linearize around upright equilibrium (theta = pi)
+x_eq = [0; 0; pi; 0];  % cart at origin, pendulum upright, at rest
+u_eq = 0;              % no force needed at equilibrium
 
-%fn handle for the dynamics
-quad_dynamics = @(x, u) quadrotor_dynamics(x, u, quadParameters);
+% Test the dynamics
+xdot_eq = f_handle(x_eq, u_eq);
+fprintf('State derivative at upright equilibrium: [%.3f, %.3f, %.3f, %.3f]\n', xdot_eq);
 
-f = quadrotor_dynamics(x, u, quadParameters)
+syms x1 x2 x3 x4 u
+x = [x1 x2 x3 x4];
 
-% Jacobian with respect to state
-A = jacobian(f, x);
+f_sym = f_handle(x, u);
 
-% Jacobian with respect to input  
-B = jacobian(f, u);
+% For linearization, you would compute Jacobians:
+A = jacobian(f_sym, x) %evaluated at (x_eq, u_eq)
+B = jacobian(f_sym, u) %evaluated at (x_eq, u_eq)
 
+fprintf('\nFor TVLQR, compute Jacobians A and B numerically or symbolically\n');
+fprintf('around your reference trajectory.\n');
 
-% Quadrotor dynamics 
-% Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
-function f = quadrotor_dynamics(x, u, quadParameters)
-    % Numerical version with specific parameter values
+function f = cartpole_dynamics_analytical()
+    % Cartpole Dynamics in Analytical Closed Form
+    % State: x = [x; x_dot; theta; theta_dot]
+    % Input: u = F (horizontal force on cart)
+    % Convention: theta = 0 (down), theta = pi (up), positive counterclockwise
     
-    %extracting quadrotor model parameters
-    m = quadParameters.m; g = quadParameters.g;
-    Jxx = quadParameters.J(1); Jyy = quadParameters.J(2); Jzz = quadParameters.J(3);
+    % Physical parameters
+    M = 1.0;    % cart mass (kg)
+    m = 0.1;    % pendulum mass (kg)
+    L = 0.5;    % pendulum length to center of mass (m)
+    g = 9.81;   % gravity (m/s^2)
     
-    %assigning state variables for ease of usage
-    % State: x = [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-    px = x(1); py = x(2); pz = x(3);
-    vx = x(4); vy = x(5); vz = x(6);
-    phi = x(7); theta = x(8); psi = x(9);
-    p = x(10); q = x(11); r = x(12);
-
-    %assigning input variables for ease of usage
-    % Input: u = [T; Mx; My; Mz]
-    T = u(1); Mp = u(2); Mq = u(3); Mr = u(4);
+    % State variables (symbolic for analytical form)
+    syms x x_dot theta theta_dot real
     
-    % Trigonometric shortcuts
-    c_phi = cos(phi); s_phi = sin(phi);
-    c_theta = cos(theta); s_theta = sin(theta);
-    c_psi = cos(psi); s_psi = sin(psi);
-    t_theta = tan(theta);
-    sec_theta = sec(theta);
+    % Control input
+    syms F real
     
-    % Closed-form dynamics
+    % Trigonometric functions
+    s_theta = sin(theta);
+    c_theta = cos(theta);
+    
+    % Common terms in dynamics
+    denominator = M + m - m * c_theta^2;
+    
+    % Analytical closed-form dynamics f(x,u) = x_dot
     f = [
-        % Position derivatives
-        vx;
-        vy;
-        vz;
+        % Cart position derivative
+        x_dot;
         
-        % Velocity derivatives
-        (T/m) * (c_phi * s_theta * c_psi + s_phi * s_psi);
-        (T/m) * (c_phi * s_theta * s_psi - s_phi * c_psi);
-        (T/m) * c_phi * c_theta - g;
+        % Cart acceleration (from coupled equations of motion)
+        (F + m * L * theta_dot^2 * s_theta - m * g * s_theta * c_theta) / denominator;
         
-        % Euler angle derivatives
-        p + q * s_phi * t_theta + r * c_phi * t_theta;
-        q * c_phi - r * s_phi;
-        q * s_phi * sec_theta + r * c_phi * sec_theta;
+        % Pendulum angle derivative  
+        theta_dot;
         
-        % Angular velocity derivatives
-        (Mp + (Jyy - Jzz) * q * r) / Jxx;
-        (Mq + (Jzz - Jxx) * p * r) / Jyy;
-        (Mr + (Jxx - Jyy) * p * q) / Jzz
+        % Pendulum angular acceleration (from coupled equations of motion)
+        (-F * c_theta - m * L * theta_dot^2 * s_theta * c_theta + (M + m) * g * s_theta) / (L * denominator)
     ];
+    
+    % Display the analytical expressions
+    fprintf('Cartpole Dynamics f(x,u):\n');
+    fprintf('x_dot_1 = x_dot\n');
+    fprintf('x_dot_2 = (F + m*L*theta_dot^2*sin(theta) - m*g*sin(theta)*cos(theta)) / (M + m - m*cos(theta)^2)\n');
+    fprintf('x_dot_3 = theta_dot\n');
+    fprintf('x_dot_4 = (-F*cos(theta) - m*L*theta_dot^2*sin(theta)*cos(theta) + (M+m)*g*sin(theta)) / (L*(M + m - m*cos(theta)^2))\n');
+    fprintf('\nParameters: M=%.1f kg, m=%.1f kg, L=%.1f m, g=%.2f m/s^2\n', M, m, L, g);
 end
+
+

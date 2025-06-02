@@ -8,72 +8,42 @@ clc; clearvars; close all;
 %% Add directories
 addpath('./lib/');
 
-%% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
+%% [INPUT] specify initial and final state: [pos, vel, theta, omega]
+% Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
-initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [3; -2; 2; 0; 0; 0];   % desired final pose
+initialState = [0; 0; 0; 0;];   % initial state: at origin, vertically down
+finalState   = [1; 0; pi; 0;];   % desired final state
 
-%% Specify Quadrotor Parameters (not defining these will result in an error)
-quadParameters.m = 0.5;        % mass (kg)
-quadParameters.g = 9.81;       % gravity (m/s^2)
-quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
+%% Specify Cart-Pole Parameters (not defining these will result in an error)
 
+cartPoleParameters.M = 1.0;    % cart mass (kg)
+cartPoleParameters.m = 0.1;    % pendulum mass (kg)
+cartPoleParameters.L = 0.5;    % pendulum length (m)
+cartPoleParameters.g = 9.81;   % gravity (m/s^2)
 %% Define the system dynamics as a function handle
-dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
+dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 5;
-numTimeSteps = 25;         % number of time samples
+maxTimeHorizon = 10;
+numTimeSteps = 50;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
+% for debugging
+load('./precomputedData/nominalTrajectory.mat');
+x_nom(:,1)'
+x_nom(:,end)'
+keyboard;
 %% Design a time-varying LQR feedback controller
 
 %Cost matrices
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-Q = 0.1*diag([
-    50,  50,  50, ...   % Position weights [px, py, pz] - high for tracking
-    5,   5,   5,  ...   % Velocity weights [vx, vy, vz] - moderate
-    10,   10,   10,  ...   % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
-    1,    1,    1  ]);     % Angular rate weights [p, q, r] - low, let inner loop handle
-
-% Q_aggressive = diag([200, 200, 200, 20, 20, 20, 80, 80, 10, 2, 2, 2]);
-% R_conservative = diag([0.05, 20, 20, 30]);
-
-% Control order: [T; Mx; My; Mz]
-R = diag([
-    1, ...    % Thrust - relatively low, thrust is "cheap"
-    30,  ...    % Roll moment Mx - higher, moments are more "expensive"
-    30,  ...    % Pitch moment My
-    20  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
-
-%optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 20; % Terminal constraint cost
-                            %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
-                            %and hence increase the terminal cost term (improve tracking/convergence performance) 
-                            % most probably, values greater than 1 would work
-
-% Tuning guidelines:
-% For better position tracking:
-% 
-% Increase position weights (px, py, pz): 100 to 200
-% Increase velocity weights if oscillations occur: 10 to 20
-% 
-% For smoother control:
-% 
-% Increase R values (especially moments): Mx, My from 10 to 50
-% Decrease attitude weights if too aggressive: 50 to 20
-% 
-% Physical reasoning:
-% 
-% Position weights (100): High because position tracking is primary objective
-% Attitude weights (50, 50, 20): Roll/pitch couple to xy-position, so weighted higher than yaw
-% Thrust weight (0.1): Low because thrust changes are energetically cheap
-% Moment weights (10, 10, 20): Higher because moments require more energy and we want smooth attitude control
-
+%Q = ;
+%R = ;
+%
 run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -84,7 +54,7 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 close all;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1; %a measure of max initial perturbations to state
+startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
 
@@ -156,56 +126,39 @@ run("./utils/plottingScript.m");
 
 %% Function definitions
 
-% Define the system dynamics: quadrotor model
-% Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
-function f = quadrotor_dynamics(x, u, quadParameters)
-    % Numerical version with specific parameter values
+% Define the system dynamics: cartpole
+% x = [p_x; v_x; theta; theta_dot]
+% u = F
+function f = cartpole_dynamics(x, u, cartPoleParameters)
+    % Numerical evaluation of cartpole dynamics
     
-    %extracting quadrotor model parameters
-    m = quadParameters.m; g = quadParameters.g;
-    Jxx = quadParameters.J(1); Jyy = quadParameters.J(2); Jzz = quadParameters.J(3);
     
-    %assigning state variables for ease of usage
-    % State: x = [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-    
-    %px = x(1); py = x(2); pz = x(3);
-    vx = x(4); vy = x(5); vz = x(6);
-    phi = x(7); theta = x(8); psi = x(9);
-    p = x(10); q = x(11); r = x(12);
+    %extract parameters
+    M = cartPoleParameters.M; m = cartPoleParameters.m;
+    L = cartPoleParameters.L; g = cartPoleParameters.g;
 
-    %assigning input variables for ease of usage
-    % Input: u = [T; Mx; My; Mz]
-    T = u(1); Mp = u(2); Mq = u(3); Mr = u(4);
+    % Extract states
+    p_x = x(1);
+    v_x = x(2);
+    theta = x(3);
+    theta_dot = x(4);
     
-    % Trigonometric shortcuts
-    c_phi = cos(phi); s_phi = sin(phi);
-    c_theta = cos(theta); s_theta = sin(theta);
-    c_psi = cos(psi); s_psi = sin(psi);
-    t_theta = tan(theta);
-    sec_theta = sec(theta);
+    % Control input
+    F = u;
     
-    % Quadrotor dynamics 
-    % Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
+    % Define trigonometric functions
+    s_theta = sin(theta);
+    c_theta = cos(theta);
+    
+    % Common denominator
+    denom = M + m - m * c_theta^2;
+    
+    % State derivatives
     f = [
-        % Position derivatives
-        vx;
-        vy;
-        vz;
-        
-        % Velocity derivatives
-        (T/m) * (c_phi * s_theta * c_psi + s_phi * s_psi);
-        (T/m) * (c_phi * s_theta * s_psi - s_phi * c_psi);
-        (T/m) * c_phi * c_theta - g;
-        
-        % Euler angle derivatives
-        p + q * s_phi * t_theta + r * c_phi * t_theta;
-        q * c_phi - r * s_phi;
-        q * s_phi * sec_theta + r * c_phi * sec_theta;
-        
-        % Angular velocity derivatives
-        (Mp + (Jyy - Jzz) * q * r) / Jxx;
-        (Mq + (Jzz - Jxx) * p * r) / Jyy;
-        (Mr + (Jxx - Jyy) * p * q) / Jzz
+        v_x;
+        (F + m * L * theta_dot^2 * s_theta - m * g * s_theta * c_theta) / denom;
+        theta_dot;
+        (-F * c_theta - m * L * theta_dot^2 * s_theta * c_theta + (M + m) * g * s_theta) / (L * denom)
     ];
 end
 
