@@ -92,8 +92,8 @@ disp(' ');
 disp('Plotting trajectories, input profiles, and metrics from MC rollouts..');
 disp(' ');
 
-plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
-plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
+plot_xtheta_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
+%plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
 
 plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
 plot_error_metrics(errors, costs, rollout_time_horizon);
@@ -176,23 +176,24 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
 end
 
 
-function plot_xy_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
+function plot_xtheta_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
     % Plot all trajectories and nominal trajectory
-    figure; hold on; grid on; axis equal;
+    figure; hold on; grid on; %axis equal;
+
+    projection_dims = [1 3]; %x-theta space
     
-    plot(rollout_x_nom(1, :), rollout_x_nom(2, :), 'k--', 'LineWidth', 2);
+    plot(rollout_x_nom(projection_dims(1), :), rollout_x_nom(projection_dims(2), :), 'k--', 'LineWidth', 2);
 
     for i = 1:length(trajectories)
-        plot(trajectories{i}(1, :), trajectories{i}(2, :), 'b-', 'LineWidth', 0.5);
-        plot(trajectories{i}(1, 1), trajectories{i}(2, 1), 'sg');
+        plot(trajectories{i}(projection_dims(1), :), trajectories{i}(projection_dims(2), :), 'b-', 'LineWidth', 0.5);
+        plot(trajectories{i}(projection_dims(1), 1), trajectories{i}(projection_dims(2), 1), 'sg');
     end
     
-    plot(complete_x_nom(1, :), complete_x_nom(2, :), 'k--', 'LineWidth', 2);
-    %plot_pentagon_car(x_nom(:,end)); %final pose
+    plot(complete_x_nom(projection_dims(1), :), complete_x_nom(projection_dims(2), :), 'k--', 'LineWidth', 2);
     
     %plot an ellipse from which initial states are sampled
-    ellipse_center = rollout_x_nom(1:2,1); % 2D center of the ellipsoid
-    cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
+    ellipse_center = [rollout_x_nom(projection_dims(1),1) rollout_x_nom(projection_dims(2),1)]; % 2D center of the ellipsoid
+    cov_2d = project_ellipsoid_matrix(covariance, projection_dims); % Extract 2D covariance
     [eig_vec, eig_val] = eig(cov_2d);
     
     theta = linspace(0, 2*pi, 100); % Parameterize ellipse
@@ -202,47 +203,62 @@ function plot_xy_trajectories(trajectories, rollout_x_nom, covariance, complete_
     rotated_ellipse = eig_vec * ellipse_boundary;
     
     plot(ellipse_center(1) + rotated_ellipse(1, :), ...
-         ellipse_center(2) + rotated_ellipse(2, :), ...
-         'k-.', 'LineWidth', 1.2);
+        ellipse_center(2) + rotated_ellipse(2, :), ...
+        'k-.', 'LineWidth', 1.2);
 
-    xlabel('p_x'); ylabel('p_y');
+    xlabel('p_x'); ylabel('\theta');
     title('Monte Carlo Rollout Trajectories');
     legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
     %hold off;
 end
 
-function plot_xyz_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
-    % Plot all trajectories and nominal trajectory
-    figure; view(3); hold on; grid on; axis equal;
-    
-    plot3(rollout_x_nom(1, :), rollout_x_nom(2, :), rollout_x_nom(3, :), 'k--', 'LineWidth', 2);
+% function plot_xyz_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
+%     % Plot all trajectories and nominal trajectory
+%     figure; view(3); hold on; grid on; axis equal;
+% 
+%     plot3(rollout_x_nom(1, :), rollout_x_nom(2, :), rollout_x_nom(3, :), 'k--', 'LineWidth', 2);
+% 
+%     for i = 1:length(trajectories)
+%         plot3(trajectories{i}(1, :), trajectories{i}(2, :), trajectories{i}(3, :), 'b-', 'LineWidth', 0.5);
+%         plot3(trajectories{i}(1, 1), trajectories{i}(2, 1), trajectories{i}(3, 1), 'sg');
+%     end
+% 
+%     plot3(complete_x_nom(1, :), complete_x_nom(2, :), complete_x_nom(3, :), 'k--', 'LineWidth', 2);
+% 
+%     % %plot an ellipse from which initial states are sampled
+%     % ellipse_center = rollout_x_nom(1:2,1); % 2D center of the ellipsoid
+%     % cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
+%     % [eig_vec, eig_val] = eig(cov_2d);
+%     % 
+%     % theta = linspace(0, 2*pi, 100); % Parameterize ellipse
+%     % %mu + 3*sigma will cover 99.7% of the distribution
+%     % %std dev, sigma = sqrt(covariance)
+%     % ellipse_boundary = 3*eig_val^(1/2) * [cos(theta); sin(theta)];
+%     % rotated_ellipse = eig_vec * ellipse_boundary;
+%     % 
+%     % plot(ellipse_center(1) + rotated_ellipse(1, :), ...
+%     %      ellipse_center(2) + rotated_ellipse(2, :), ...
+%     %      'k-.', 'LineWidth', 1.2);
+% 
+%     xlabel('p_x'); ylabel('p_y'); zlabel('p_z');
+%     title('Monte Carlo Rollout Trajectories');
+%     legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
+%     %hold off;
+% end
 
-    for i = 1:length(trajectories)
-        plot3(trajectories{i}(1, :), trajectories{i}(2, :), trajectories{i}(3, :), 'b-', 'LineWidth', 0.5);
-        plot3(trajectories{i}(1, 1), trajectories{i}(2, 1), trajectories{i}(3, 1), 'sg');
-    end
+function M_2d = project_ellipsoid_matrix(M, projection_dims)
+    % Input:
+    % M: nxn matrix defining the n-dimensional ellipsoid x^T M x < 1
+    % projection_dims: 2-element vector specifying which dimensions to project onto
+    %                  (e.g., [1 2] for xy-plane, [1 3] for xz-plane)
     
-    plot3(complete_x_nom(1, :), complete_x_nom(2, :), complete_x_nom(3, :), 'k--', 'LineWidth', 2);
-    
-    % %plot an ellipse from which initial states are sampled
-    % ellipse_center = rollout_x_nom(1:2,1); % 2D center of the ellipsoid
-    % cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
-    % [eig_vec, eig_val] = eig(cov_2d);
-    % 
-    % theta = linspace(0, 2*pi, 100); % Parameterize ellipse
-    % %mu + 3*sigma will cover 99.7% of the distribution
-    % %std dev, sigma = sqrt(covariance)
-    % ellipse_boundary = 3*eig_val^(1/2) * [cos(theta); sin(theta)];
-    % rotated_ellipse = eig_vec * ellipse_boundary;
-    % 
-    % plot(ellipse_center(1) + rotated_ellipse(1, :), ...
-    %      ellipse_center(2) + rotated_ellipse(2, :), ...
-    %      'k-.', 'LineWidth', 1.2);
+    n = size(M, 1); %get the dimensionality of matrix M
 
-    xlabel('p_x'); ylabel('p_y'); zlabel('p_z');
-    title('Monte Carlo Rollout Trajectories');
-    legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
-    %hold off;
+    basisMatrix = zeros(n,2);
+    basisMatrix(projection_dims(1),1) = 1;
+    basisMatrix(projection_dims(2),2) = 1;
+
+    M_2d = inv(basisMatrix' *inv(M) * basisMatrix);
 end
 
 function plot_input_profiles(input_profiles, rollout_time_instances, complete_u_nom, complete_time_instances)

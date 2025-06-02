@@ -60,21 +60,21 @@ disp(' ');
 
 if drawFlag 
 
-    %plotStateInputTrajectories(time_instances, x_nom, u_nom);
-    %sgtitle(sprintf('Cartpole Swing-Up Trajectory (T = %.2f s)', time_instances(end)));
-    %sgtitle: Title for a grid of subplots
+    animate_cartpole_trajectory(time_instances, x_nom, cartPoleParameters);
 
     plotPolePosition(x_nom, cartPoleParameters);
-    title('2D Cartpole Trajectory View');
+    title('Cartpole Trajectory');
 
-    animate_cartpole_trajectory(time_instances, x_nom, cartPoleParameters);
+    plotStateInputTrajectories(time_instances, x_nom, u_nom);
+    sgtitle(sprintf('Cartpole Swing-Up Trajectory (T_f = %.2f s)', time_instances(end)));
+    %sgtitle: Title for a grid of subplots
 end
 
 %clearvars; %cleanup the workspace after saving relevant data and plotting
 
 %% Local Function definitions
 
-function plotStateInputTrajectories(t_opt, x_opt, u_opt, params)
+function plotStateInputTrajectories(t_opt, x_opt, u_opt)
     figure('Position', [100, 100, 1200, 800]);
         
     subplot(2,3,1);
@@ -138,11 +138,11 @@ function plotPolePosition(x_opt, params)
     % Mark start and end positions
     plot(pole_tip_x(1), pole_tip_y(1), 'go', 'MarkerSize', 10, 'MarkerFaceColor', 'g');
     plot(pole_tip_x(end), pole_tip_y(end), 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
-    plot(cart_x(1), cart_y(1), 'gs', 'MarkerSize', 10, 'MarkerFaceColor', 'g');
-    plot(cart_x(end), cart_y(end), 'rs', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+    %plot(cart_x(1), cart_y(1), 'gs', 'MarkerSize', 10, 'MarkerFaceColor', 'g');
+    %plot(cart_x(end), cart_y(end), 'rs', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
     
     % Add some intermediate pole positions for visualization
-    n_intermediate = 8;
+    n_intermediate = 6;
     indices = round(linspace(1, length(cart_x), n_intermediate));
     for i = indices
         % Draw pole as line from cart to tip
@@ -157,7 +157,7 @@ function plotPolePosition(x_opt, params)
     xlabel('X Position (m)'); %ylabel('Y Position (m)');
     
     legend('Pole Tip Path', 'Cart Path', 'Start (Pole)', 'End (Pole)', ...
-           'Start (Cart)', 'End (Cart)', 'Location', 'best');
+            'Location', 'best'); %'Start (Cart)', 'End (Cart)',
     
     % Set reasonable axis limits
     x_range = [min([cart_x, pole_tip_x]) - 0.2, max([cart_x, pole_tip_x]) + 0.2];

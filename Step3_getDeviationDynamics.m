@@ -53,17 +53,22 @@ disp(['Polynomializing the system dynamics using Taylor expansion of order ' num
 disp(' ');
 
 %taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
-% this expression will be in terms of vars and expansion point_a
+% this symbolic expression will be in terms of vars and expansion point_a
+%INDEPENDENT of the hyper-parameters used in traj optimisation or feedback controller synthesis 
+%DEPENDENT only on system dynamics f, and the parameters in the mathematical equations of f.
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
 load('./precomputedData/taylorApproxDynamicsSym.mat');
+
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes
 %rand_timeInstance = randi(N);
 %nom_state = x_nom(:, rand_timeInstance);
 %nom_input = u_nom(:, rand_timeInstance);
+
+load('./precomputedData/taylorApproxDynamicsSym.mat');
 
 disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
@@ -86,8 +91,8 @@ end
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
 % Converting expression from syms to pvar (to use SOSTOOLS functionalities)
-pvar x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
-xbar = [x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12]'; %deviations --> nx1 vector
+pvar x1 x2 x3 x4
+xbar = [x1 x2 x3 x4]'; %deviations --> nx1 vector
 %xbar: pvar variables referring to state deviations *off* the nominal state 
 
 disp('Computing state deviation dynamics at each nominal state-input pair');

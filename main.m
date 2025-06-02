@@ -20,6 +20,7 @@ cartPoleParameters.M = 1.0;    % cart mass (kg)
 cartPoleParameters.m = 0.1;    % pendulum mass (kg)
 cartPoleParameters.L = 0.5;    % pendulum length (m)
 cartPoleParameters.g = 9.81;   % gravity (m/s^2)
+
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 
@@ -32,10 +33,11 @@ drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
-%% for debugging
+% for debugging
 load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
+
 keyboard;
 %% Design a time-varying LQR feedback controller
 
@@ -48,7 +50,7 @@ run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
-load('./precomputedData/LQRGainsAndCostMatrices.mat');
+%load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
@@ -67,7 +69,7 @@ load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 plotOneLevelSet_2D(x_nom, P);
-plotOneLevelSet_3D(x_nom, P);
+%plotOneLevelSet_3D(x_nom, P);
 
 keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
@@ -163,11 +165,11 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
 end
 
 function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
-    figure; hold on; grid on; axis equal;
+    figure; hold on; grid on; %axis equal;
 
     P = plottingFnsClass();
     
-    projectionDims = [1 2];
+    projectionDims = [1 3];
 
     %plot ellipsoidal invariant sets in 2D
     for k=1:1:length(x_nom)
@@ -185,12 +187,12 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
     xlabel('p_x');
-    ylabel('p_y');
+    ylabel('\theta');
 end
 
 function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
     figure; view(3);
-    hold on; grid on; axis equal;
+    hold on; grid on; %axis equal;
 
     P = plottingFnsClass();
 
@@ -210,6 +212,6 @@ function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
     %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
     xlabel('p_x');
-    ylabel('p_y');
-    zlabel('p_z');
+    ylabel('v_x');
+    zlabel('\theta');
 end
