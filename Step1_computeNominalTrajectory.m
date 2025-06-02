@@ -165,7 +165,7 @@ function plotPolePosition(x_opt, params)
     xlim(x_range); ylim(y_range);
 end
 
-%% Animated visualization function
+% Animated visualization function
 function animate_cartpole_trajectory(t_opt, x_opt, params)
     % Animate the cartpole swing-up trajectory
     

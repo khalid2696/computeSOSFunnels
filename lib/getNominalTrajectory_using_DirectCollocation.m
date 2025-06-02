@@ -1,5 +1,5 @@
 function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
-    getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N, cartpole_params)
+    getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N, cartPoleParameters)
 
     %% Optimization parameters - cost function and state/input constraints
     timeHorizon_weight = 1.0;      % Weight for minimizing time
@@ -12,12 +12,6 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     
     % Input constraints  
     force_limits = [-20, 20];  % Horizontal force limits (N)
-    
-    %% Extract cartpole model parameters
-    M = cartpole_params.M;  % Cart mass
-    m = cartpole_params.m;  % Pendulum mass
-    L = cartpole_params.L;  % Pendulum length
-    g = cartpole_params.g;  % Gravity
     
     %% Define Decision Variables
     T = sdpvar(1);              % Variable time horizon
@@ -107,7 +101,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         
         % Display results
         fprintf('Optimal time horizon: %.3f seconds\n', T_opt);
-        fprintf('Final cost: %.6f\n', cost_opt);
+        %fprintf('Final cost: %.6f\n', cost_opt);
         fprintf('Cart final position: %.3f m\n', x_opt(1, end));
         fprintf('Pendulum final angle: %.3f rad (%.1f deg)\n', x_opt(3, end), rad2deg(x_opt(3, end)));
         
@@ -121,28 +115,5 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         u_opt = NaN;
         time_instances_opt = NaN;
         cost_opt = NaN;
-    end
-end
-
-%% Helper function to create cartpole parameters structure
-function params = create_cartpole_params()
-    params.M = 1.0;    % Cart mass (kg)
-    params.m = 0.1;    % Pendulum mass (kg) 
-    params.L = 0.5;    % Pendulum length (m)
-    params.g = 9.81;   % Gravity (m/s^2)
-end
-
-%% Example usage function
-function demo_cartpole_optimization()
-    % Load cartpole dynamics
-    cartpole_dyn = cartpole_dynamics_numerical();  % From previous artifact
-    
-    % System parameters
-    params = create_cartpole_params();
-    
-    
-    if ~isnan(x_opt)
-        % Plot results
-        
     end
 end

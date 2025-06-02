@@ -32,7 +32,7 @@ drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
-% for debugging
+%% for debugging
 load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
@@ -43,7 +43,7 @@ keyboard;
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
 %Q = ;
 %R = ;
-%
+%terminalRegionScaling = 10;
 run("Step2_FeedbackControllerSythesis.m");
 disp('- - - - - - -'); disp(" ");
 
