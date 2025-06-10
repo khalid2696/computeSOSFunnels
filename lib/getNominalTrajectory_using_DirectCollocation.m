@@ -1,6 +1,8 @@
 function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
-getNominalTrajectory_using_DirectCollocation(dynamics, x0, xf, input_saturations, T_max, N)
+getNominalTrajectory_using_DirectCollocation(unicycle_dynamics, x0, xf, T_max, N)
 
+    input_saturations = [0.75; pi/2]; %Linear and angular velocity limits (absolute value)
+                                      % -input_saturations(j) <= u_j <= input_saturations(j) 
     % Optimization variables
     x = sdpvar(3, N);    % States [x; y; theta]
     u = sdpvar(2, N);    % Control inputs [v; omega]
@@ -51,8 +53,8 @@ getNominalTrajectory_using_DirectCollocation(dynamics, x0, xf, input_saturations
 
     % Dynamics constraints (collocation)
     for k = 1:N-1
-        f1 = dynamics(x(:, k), u(:, k));
-        f2 = dynamics(x(:, k+1), u(:, k+1));
+        f1 = unicycle_dynamics(x(:, k), u(:, k));
+        f2 = unicycle_dynamics(x(:, k+1), u(:, k+1));
         x_next = x(:, k) + 0.5 * dt * (f1 + f2); % Trapezoidal integration
         constraints = [constraints, x(:, k+1) == x_next];
     end

@@ -19,19 +19,19 @@ load('./precomputedData/nominalTrajectory.mat');
 
 %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%
 % two options for terminal cost:
-% 1 - Fixed, input matrix --> define Qf in main file
+% 1 - Fixed, input matrix --> define Pf in main file
 % 2 - From time-invariant LQR --> computed downstream in this script
 
-% Qf = Q; %Option 1 --> not preferred (requires good sense of the system
+% Pf = Q; %Option 1 --> not preferred (requires good sense of the system
 %dynamics and scalings between the various constituents of the state vector)
 %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%
 
 if ~exist('Q','var')
-    Q = diag([10, 10, 1]); % State cost
+    Q = eye(size(x_nom,1)); % State cost
 end
 
 if ~exist('R','var')
-    R = diag([1, 0.01]); % Control cost
+    R = eye(size(u_nom,1)); % Control cost
 end
 
 if ~exist('terminalRegionScaling','var')
@@ -45,12 +45,14 @@ end
 nx = size(x_nom, 1); nu = size(u_nom, 1);
 x = createSymbolicVector('x', nx); %state vector
 u = createSymbolicVector('u', nu); %input vector
-% [x1, x2, x3] -- [p_x p_y theta]
-% [u1, u2]     -- [v, omega]
+% [x1, x2, .., x12] -- [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
+% [u1, u2, u3, u4]  -- [T; Mp; Mq; Mr]
 
-f = [u(1) * cos(x(3));   % x_dot
-     u(1) * sin(x(3));   % y_dot
-         u(2)        ;]; % theta_dot
+f = dynamicsFnHandle(x, u);
+
+if length(f) ~= length(x)
+    error('State vector (x) and dynamics fn (f) are of not same length!');
+end
 
 %% Define terminal cost matrix if not specified using TI-LQR
 if ~exist('P_f','var')
@@ -69,12 +71,13 @@ disp('Finished synthesizing a time-varying LQR stabilizing feedback controller')
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P');
+f_sym = f;
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P' , 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
 
-clearvars;
+%clearvars;
 %% Function definitions
 
 %inputs 

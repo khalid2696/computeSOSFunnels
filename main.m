@@ -5,10 +5,17 @@ clc; clearvars; close all;
 %WARNING: Will have to use the same variable names as below if we want to
 %         pass onto the corresponding scripts
 
-%% [INPUT] specify initial and final states
+%% Add directories
+addpath('./lib/');
 
-xinitial = [0; 0; pi/2];   % initial state: origin, pointing North 
-xfinal   = [2; 5; pi/2];   % desired final state 
+%% [INPUT] specify initial and final state: [pos_x, pos_y, theta]
+% Convention: theta = pi/2 -- North, 0 -- East
+
+initialState = [0; 0; pi/2;];   % initial state: at origin facing North
+finalState   = [2; 5; pi/2;];   % desired final state
+
+%% Define the system dynamics as a function handle
+dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
@@ -30,16 +37,27 @@ terminalRegionScaling = 10; % Terminal constraint cost
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
 
-run("Step2_FeedbackControllerSythesis.m");
+run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
-%% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
-%startTimeIndex = 1; %start time for the rollouts
-%initial_state_covariance = (1/3)*(M(:,:,1)/rhoGuess(1))^(-1/2); %specify the covariance for sampling initial states
-%run("./utils/checkClosedLoop_usingMCRollouts.m");
+%% Optionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
-% Or, alternatively visualise the flow field of the closed loop system 
-%run("./utils/visualise_flowField.m");
+close all;
+startTimeIndex = 1; %start time for the rollouts
+startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
+                         %decrease this for a smaller initial set
+run("./utils/checkClosedLoop_MCRollouts.m");
+
+%% [Optional] Load all the saved files for further analysis
+
+clearvars; %close all;
+addpath('./lib/');
+
+load('./precomputedData/nominalTrajectory.mat');
+load('./precomputedData/LQRGainsAndCostMatrices.mat');
+
+plotOneLevelSet_2D(x_nom, P);
+%plotOneLevelSet_3D(x_nom, P);
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
@@ -48,16 +66,6 @@ run("Step3_getDeviationDynamics.m");
 %      if you don't want to double-check that xbar_dot(0) = 0 at each t = t_k
 
 disp('- - - - - - -'); disp(" ");
-
-%% [Optional] Load all the saved files for further analysis
-
-%clearvars;
-
-%load('./precomputedData/nominalTrajectory.mat');
-%load('./precomputedData/LQRGainsAndCostMatrices.mat');
-%load('./precomputedData/deviationDynamics.mat');
-
-%plotOneLevelSet(x_nom, P);
 
 %% Time-conditioned invariant set analysis (with time-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
@@ -80,6 +88,7 @@ run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
+close all
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
@@ -107,51 +116,65 @@ run("./utils/plottingScript.m");
 
 %% Function definitions
 
-function plotOneLevelSet(x_nom, ellipsoidMatrix)
-    figure
-    hold on;
-    grid on; 
-    axis equal;
+% Define the system dynamics: unicycle
+% x = [p_x; p_y; theta]
+% u = [v; omega]
+function f = unicycle_dynamics(x, u)
+
+    % Unicycle dynamics: x_dot = f(x, u)
+    f = [u(1) * cos(x(3)); ...  % x_dot
+         u(1) * sin(x(3)); ...  % y_dot
+         u(2)];                % theta_dot
+end
+
+function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
+    figure; hold on; grid on; axis equal;
+
+    P = plottingFnsClass();
     
+    projectionDims = [1 2];
+
+    %plot ellipsoidal invariant sets in 2D
     for k=1:1:length(x_nom)
         M = ellipsoidMatrix(:,:,k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
-        plotEllipse(center, M_xy)
+        M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
+        %center = x_nom(:,k);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
+        %plotEllipse(center, M_xy);
+        P.plotEllipse(center, M_xy);
     end 
     
+    %nominal trajectory
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
+
+    %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
     xlabel('p_x');
     ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
 end
 
-function M_2d = project_ellipsoid_matrix(M, projection_dims)
-    % Input:
-    % M: nxn matrix defining the n-dimensional ellipsoid x^T M x < 1
-    % projection_dims: 2-element vector specifying which dimensions to project onto
-    %                  (e.g., [1 2] for xy-plane, [1 3] for xz-plane)
-    
-    n = size(M, 1); %get the dimensionality of matrix M
-
-    basisMatrix = zeros(n,2);
-    basisMatrix(projection_dims(1),1) = 1;
-    basisMatrix(projection_dims(2),2) = 1;
-
-    M_2d = inv(basisMatrix' *inv(M) * basisMatrix);
-end
-
-function plotEllipse(center, ellipseMatrix)
-    
-    %plot an ellipse from which initial states are sampled
-    ellipseCenter = center(1:2); % 2D center of the ellipsoid
-    [eig_vec, eig_val] = eig(ellipseMatrix);
-    
-    theta = linspace(0, 2*pi, 100); % Parameterize ellipse
-    ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
-    rotated_ellipse = eig_vec * ellipse_boundary;
-    
-    plot(ellipseCenter(1) + rotated_ellipse(1, :), ...
-         ellipseCenter(2) + rotated_ellipse(2, :), ...
-         '-k', 'LineWidth', 1.2);  
-end
+% function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
+%     figure; view(3);
+%     hold on; grid on; %axis equal;
+% 
+%     P = plottingFnsClass();
+% 
+%     projectionDims = [1 2 3];
+% 
+%     %plot ellipsoidal invariant sets in 3D
+%     for k=1:1:length(x_nom)
+%         M = ellipsoidMatrix(:,:,k);
+%         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
+%         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
+%         P.plotEllipsoid(center, M_xyz);
+%     end 
+% 
+%     %nominal trajectory
+%     plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
+% 
+%     %formatting
+%     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
+%     xlabel('p_x');
+%     ylabel('p_y');
+%     zlabel('\theta');
+% end
