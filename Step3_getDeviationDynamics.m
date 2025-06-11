@@ -17,6 +17,7 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 % K              : Feedback gains (sampled)      : n_u x n_x x N
 % P              : cost-to-goal matrix (sampled) : n_x x n_x x N
 % dynamicsFnHandle : the function handle of the system dynamics
+% f_sym          : system dynamics, f in terms of symbolic x and u: f(x,u) = xdot
 
 %Note: cost-to-go matrices, P will be used for candidate Lyapunov functions
 
@@ -61,18 +62,23 @@ disp(' ');
 %taylor_approx = taylor_expansion(symbolicDynamics, symVars, expansion_point_a_symbolic, order);
 % this expression will be in terms of vars and expansion point_a
 
-%pre-computed for uniycle dynamics (for quicker debugging)!!
-%lines: 67--75
+%pre-computed polynomial-approximated dynamics (for quicker results)!!
+%variable name: taylor_approx (symbolic - nx1 matrix)
+load('./precomputedData/taylorApproxDynamicsSym.mat');
 
-%re-assigning variables for ease of usage
-x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
-a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
-a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
+%taylor-expansion of uniycle dynamics, order = 3 (for debugging)!!
+%lines: 72--80
 
-taylor_approx = ...
-[a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
- a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-                                                                                                                                                                                   u2];
+% %re-assigning variables for ease of usage
+% x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
+% a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
+% a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
+% 
+% taylor_approx = ...
+% [a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
+%  a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
+%                                                                                                                                                                                    u2];
+%
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes
@@ -82,7 +88,9 @@ taylor_approx = ...
 
 disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
-for k = 1:N %length of time samples
+
+systemPolyDynamics = cell(1,N);
+parfor k = 1:N %length of time samples
 
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
@@ -97,18 +105,21 @@ end
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
 % Converting expression from syms to pvar (to use SOSTOOLS functionalities)
-pvar x1 x2 x3
-xbar = [x1 x2 x3]'; %deviations --> nx1 vector
+%pvar x1 x2 x3
+%xbar = [x1 x2 x3]'; %deviations --> nx1 vector
 %xbar: pvar variables referring to state deviations *off* the nominal state 
+xbar = createPvarVector('x', n);
 
 disp('Computing state deviation dynamics at each nominal state-input pair');
 disp(' ');
 
-for k = 1:N %length of time samples
+deviationDynamics = cell(1,N);
+parfor k = 1:N %length of time samples
     
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
     controlGainMatrix = K(:, :, k);
+    sym_polyDynamics_at_a = systemPolyDynamics{k};
     
     %deviation_dynamics: polynomial function in terms of xbar (deviations) ONLY
     %symVars --> (symbolic) [x; u]
@@ -239,4 +250,20 @@ function sym_vector = createSymbolicVector(vecSymbol, n)
     sym_vector = sym(varNames, 'real');
 
     sym_vector = sym_vector'; %column matrix by convention -- nx1
+end
+
+%inputs 
+% varName: string -- name of vector
+% n: int -- length of vector
+function pvar_vector = createPvarVector(vecSymbol, n)
+    var_names = arrayfun(@(i) [vecSymbol num2str(i)], 1:n, 'UniformOutput', false);
+    var_string = strjoin(var_names, ' ');
+    
+    % Create pvar in caller workspace
+    evalin('caller', ['pvar ' var_string]);
+    
+    % Create the vector in caller workspace and return it
+    evalin('caller', ['temp_pvar_vector = [' strjoin(var_names, '; ') '];']);
+    pvar_vector = evalin('caller', 'temp_pvar_vector');
+    evalin('caller', 'clear temp_pvar_vector'); % clean up
 end

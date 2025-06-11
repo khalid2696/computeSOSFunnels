@@ -30,13 +30,13 @@ terminalRegionScaling = 10; % Terminal constraint cost
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
 
-run("Step2_FeedbackControllerSythesis.m");
+run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 %startTimeIndex = 1; %start time for the rollouts
 %initial_state_covariance = (1/3)*(M(:,:,1)/rhoGuess(1))^(-1/2); %specify the covariance for sampling initial states
-%run("./utils/checkClosedLoop_usingMCRollouts.m");
+%run("./utils/checkClosedLoop_MCRollouts.m");
 
 % Or, alternatively visualise the flow field of the closed loop system 
 %run("./utils/visualise_flowField.m");

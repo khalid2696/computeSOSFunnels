@@ -208,26 +208,20 @@ function plot_input_profiles(input_profiles, rollout_time_instances, complete_u_
     % Plot all trajectories and nominal trajectory
     figure;
     
-    subplot(2,1,1)
-    hold on;
-    grid on; 
-    for i = 1:length(input_profiles)
-        plot(rollout_time_instances, input_profiles{i}(1, :), 'b-', 'LineWidth', 0.5);
-    end
-    plot(complete_time_instances, complete_u_nom(1, :), 'k--', 'LineWidth', 2);
-    xlabel('time'); ylabel('u_1');
-    title('Input history from Monte Carlo Rollouts');
-    
-    subplot(2,1,2)
-    hold on;
-    grid on; 
-    for i = 1:length(input_profiles)
-        plot(rollout_time_instances, input_profiles{i}(2, :), 'b-', 'LineWidth', 0.5);
-    end
-    plot(complete_time_instances, complete_u_nom(2, :), 'k--', 'LineWidth', 2);
+    m = size(complete_u_nom,1);
+    for i=1:m
+        subplot(m,1,i)
+        hold on; grid on; 
+        for j = 1:length(input_profiles)
+            plot(rollout_time_instances, input_profiles{j}(i, :), 'b-', 'LineWidth', 0.5);
+        end
+        plot(complete_time_instances, complete_u_nom(i, :), 'k--', 'LineWidth', 2);
+        xlabel('time'); ylabel(sprintf('u_{%d}', i))
 
-    xlabel('time'); ylabel('u_2');
-    %legend('Sample Trajectories', 'Initial states', 'Nominal Trajectory', '');
+        if i==1
+            title('Input history from Monte Carlo Rollouts');
+        end
+    end
 end
 
 % Plot error and cost metrics over time
