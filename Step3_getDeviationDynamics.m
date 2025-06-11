@@ -31,6 +31,12 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 %total control input, u_k = u_nom - K_k delta_x
 %u_k = u_nom(:, k) - K(:, :, k) * (x_traj(:, k) - x_nom(:, k));
 
+%% Inherit parameters if they exist in the wrapper file
+
+if ~exist('order','var')
+    order = 3; %default order of Taylor expansion
+end
+
 %% Symbolic Taylor expansion for any general expansion point 'a'
 
 %create symbolic variables of state and input vector based on the
@@ -47,7 +53,6 @@ expansion_point_varSymbol = 'a';
 expansion_point_a_symbolic = createSymbolicVector(expansion_point_varSymbol, length(symVars));
 %expansion_point_a_symbolic = [a1 a2 .. a(n+m)]'; %column matrix by convention -- (n+m)x1
 
-order = 3;
 disp('Hang on..')
 disp(['Polynomializing the system dynamics using Taylor expansion of order ' num2str(order)]);
 disp(' ');
@@ -74,7 +79,7 @@ disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
 
 systemPolyDynamics = cell(1,N);
-for k = 1:N %length of time samples
+parfor k = 1:N %length of time samples
 
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
@@ -85,8 +90,6 @@ for k = 1:N %length of time samples
 
     systemPolyDynamics{k} = sym_polyDynamics_at_a;
 end
-
-%keyboard
 
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
@@ -100,11 +103,12 @@ disp('Computing state deviation dynamics at each nominal state-input pair');
 disp(' ');
 
 deviationDynamics = cell(1,N);
-for k = 1:N %length of time samples
+parfor k = 1:N %length of time samples
     
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
     controlGainMatrix = K(:, :, k);
+    sym_polyDynamics_at_a = systemPolyDynamics{k};
     
     %deviation_dynamics: polynomial function in terms of xbar (deviations) ONLY
     %symVars --> (symbolic) [x; u]
@@ -235,7 +239,6 @@ function taylor_approx_at_a = get_expansion_at_point(taylor_approx, point_varSym
 end
 
 
-
 %inputs 
 % varName: string -- name of vector
 % n: int -- length of vector
@@ -252,6 +255,9 @@ function sym_vector = createSymbolicVector(vecSymbol, n)
     sym_vector = sym_vector'; %column matrix by convention -- nx1
 end
 
+%inputs 
+% varName: string -- name of vector
+% n: int -- length of vector
 function pvar_vector = createPvarVector(vecSymbol, n)
     var_names = arrayfun(@(i) [vecSymbol num2str(i)], 1:n, 'UniformOutput', false);
     var_string = strjoin(var_names, ' ');

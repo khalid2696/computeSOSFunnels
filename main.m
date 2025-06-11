@@ -46,7 +46,7 @@ Q = diag([5, 0.1, 10, 0.1]);
 R = 0.1;
 terminalRegionScaling = 20;
 
-run("Step2_FeedbackControllerSythesis.m");
+run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
@@ -75,6 +75,7 @@ plotOneLevelSet_2D(x_nom, P);
 keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
+%order = 3; %order of Taylor expansion
 run("Step3_getDeviationDynamics.m");
 %Note: comment out lines 109-112 of the above script 
 %      if you don't want to double-check that xbar_dot(0) = 0 at each t = t_k
