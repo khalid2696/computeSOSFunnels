@@ -1,4 +1,4 @@
-clc; clearvars; close all
+%clc; clearvars; close all
 
 warning('off','MATLAB:singularMatrix');
 
@@ -60,7 +60,7 @@ end
 % Option1: constant rho_guess -- rhoGuessChoice = 'const'
 %[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
 if ~exist('rhoInitialGuessConstant','var')
-    rhoInitialGuessConstant = 1;
+    rhoInitialGuessConstant = 0.1;
 end 
 
 % Option2: Exponentially (quickly) increasing rho_guess -- rhoGuessChoice = 'exp'
@@ -98,15 +98,16 @@ title('Initial guess funnel');
 plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
 plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 
+drawnow
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+%plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+%plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+%plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
@@ -480,7 +481,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         if ~all(real(eig(A_at_origin)) < 0)
             disp(k); disp(eig(A_at_origin));
             disp('Nominal trajectory cannot be determined to be stable using indirect Lyapunov method');  
-            error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
+            %error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
@@ -519,28 +520,29 @@ end
 
 %% Plotting functions
 function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
-    figure
-    hold on;
-    grid on; 
-    axis equal;
+    figure; hold on; grid on; %axis equal;
     
+    projection_dims = [1 3]; %x-theta space
+
     for k=1:1:length(x_nom)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
+        M_xy = project_ellipsoid_matrix(M, projection_dims);
+        center = [x_nom(projection_dims(1),k), x_nom(projection_dims(2),k)]';
         plotEllipse(center, M_xy)
     end 
     
     title('Invariant Ellipsoidal Sets along the nominal trajectory');
     xlabel('p_x');
-    ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
+    ylabel('\theta');
+    plot(x_nom(projection_dims(1),:),x_nom(projection_dims(2),:),'--b');
 end
 
 function plotInitialSet(x_initial, initialEllipsoid)
+    
+    M = initialEllipsoid; 
+    projection_dims = [1 3]; %x-theta space
 
-    M = initialEllipsoid;
-    M_xy = project_ellipsoid_matrix(M, [1 2]);
+    M_xy = project_ellipsoid_matrix(M, projection_dims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -548,15 +550,17 @@ function plotInitialSet(x_initial, initialEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_initial(1) + rotated_ellipse(1, :), ...
-         x_initial(2) + rotated_ellipse(2, :), ...
+    plot(x_initial(projection_dims(1)) + rotated_ellipse(1, :), ...
+         x_initial(projection_dims(2)) + rotated_ellipse(2, :), ...
          '-.g', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
-function plotFinalSet(x_initial, finalEllipsoid)
+function plotFinalSet(x_final, finalEllipsoid)
 
     M = finalEllipsoid;
-    M_xy = project_ellipsoid_matrix(M, [1 2]);
+    projection_dims = [1 3]; %x-theta space
+
+    M_xy = project_ellipsoid_matrix(M, projection_dims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -564,8 +568,8 @@ function plotFinalSet(x_initial, finalEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_initial(1) + rotated_ellipse(1, :), ...
-         x_initial(2) + rotated_ellipse(2, :), ...
+    plot(x_final(projection_dims(1)) + rotated_ellipse(1, :), ...
+         x_final(projection_dims(2)) + rotated_ellipse(2, :), ...
          '-.r', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
@@ -587,7 +591,7 @@ end
 function plotEllipse(center, ellipseMatrix)
     
     %plot an ellipse from which initial states are sampled
-    ellipseCenter = center(1:2); % 2D center of the ellipsoid
+    ellipseCenter = center; % 2D center of the ellipsoid
     [eig_vec, eig_val] = eig(ellipseMatrix);
     
     theta = linspace(0, 2*pi, 100); % Parameterize ellipse

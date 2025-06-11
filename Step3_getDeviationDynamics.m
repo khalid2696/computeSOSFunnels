@@ -146,9 +146,7 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     % fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6) %cleanup upto 6 decimal places
 
     state = x_nom + xBar_pvar; %nominal state + deviation
-    input = u_nom - controlGainMatrix*xBar_pvar;
-    %note that u1 and u2 are not used since they depend on x1, x2, x3 as
-    %[u1; u2] = controlGainMatrix*[x1 x2 x3]'
+    input = u_nom - controlGainMatrix*xBar_pvar; %nominal input + feedback input
 
     pvarVars = [state', input'];  % Corresponding pvar variables
     
@@ -181,6 +179,7 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     %clean-up the small terms less than the tolerance
     tolerance = 1e-6;
     deviation_dynamics = cleanpoly(deviation_dynamics, tolerance);
+
 end
 
 function taylor_approx = taylor_expansion(f, vars, a, order)
@@ -191,15 +190,11 @@ function taylor_approx = taylor_expansion(f, vars, a, order)
     % Iterate over each term in the vector-valued function f
     for i = 1:length(f)
 
-        i
-
         % Initialize the Taylor expansion for the i-th component
         f_i_taylor = subs(f(i), vars, a); % Zeroth-order term (f(a))
         
         % Add higher-order terms iteratively
         for k = 1:order
-            
-            k
 
             term = 0; % Initialize the term of order k
             

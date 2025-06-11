@@ -15,45 +15,32 @@ plotFunnel(x_nom, ellipsoidMatrices, rhoScaling);
 plotInitialSet(x_nom(:,1), inletRegion);
 plotFinalSet(x_nom(:,end), outletRegion);
 
-%% Plot 3D funnel
-
-figure; hold on; grid on; view(3);
-for k=1:length(time_instances)
-    tempState = x_nom(:,k);
-    tempInvariantSet = ellipsoidMatrices(:,:,k)/rhoScaling(k);
-
-    plotEllipsoid(tempState, tempInvariantSet);
-end
-
-plotEllipsoid(x_nom(:,1), inletRegion, 'green');
-plotEllipsoid(x_nom(:,end), inletRegion, 'red');
-title('3-D Invariant Ellipsoidal Sets');
-
 %% Function definitions
 
 function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
-    figure
-    hold on;
-    grid on; 
-    axis equal;
+    figure; hold on; grid on; %axis equal;
     
+    projection_dims = [1 3]; %x-theta space
+
     for k=1:1:length(x_nom)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
+        M_xy = project_ellipsoid_matrix(M, projection_dims);
+        center = [x_nom(projection_dims(1),k), x_nom(projection_dims(2),k)]';
         plotEllipse(center, M_xy)
     end 
     
     title('Invariant Ellipsoidal Sets along the nominal trajectory');
     xlabel('p_x');
-    ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
+    ylabel('\theta');
+    plot(x_nom(projection_dims(1),:),x_nom(projection_dims(2),:),'--b');
 end
 
 function plotInitialSet(x_initial, initialEllipsoid)
+    
+    M = initialEllipsoid; 
+    projection_dims = [1 3]; %x-theta space
 
-    M = initialEllipsoid;
-    M_xy = project_ellipsoid_matrix(M, [1 2]);
+    M_xy = project_ellipsoid_matrix(M, projection_dims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -61,15 +48,17 @@ function plotInitialSet(x_initial, initialEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_initial(1) + rotated_ellipse(1, :), ...
-         x_initial(2) + rotated_ellipse(2, :), ...
+    plot(x_initial(projection_dims(1)) + rotated_ellipse(1, :), ...
+         x_initial(projection_dims(2)) + rotated_ellipse(2, :), ...
          '-.g', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
-function plotFinalSet(x_initial, finalEllipsoid)
+function plotFinalSet(x_final, finalEllipsoid)
 
     M = finalEllipsoid;
-    M_xy = project_ellipsoid_matrix(M, [1 2]);
+    projection_dims = [1 3]; %x-theta space
+
+    M_xy = project_ellipsoid_matrix(M, projection_dims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -77,8 +66,8 @@ function plotFinalSet(x_initial, finalEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_initial(1) + rotated_ellipse(1, :), ...
-         x_initial(2) + rotated_ellipse(2, :), ...
+    plot(x_final(projection_dims(1)) + rotated_ellipse(1, :), ...
+         x_final(projection_dims(2)) + rotated_ellipse(2, :), ...
          '-.r', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
@@ -100,7 +89,7 @@ end
 function plotEllipse(center, ellipseMatrix)
     
     %plot an ellipse from which initial states are sampled
-    ellipseCenter = center(1:2); % 2D center of the ellipsoid
+    ellipseCenter = center; % 2D center of the ellipsoid
     [eig_vec, eig_val] = eig(ellipseMatrix);
     
     theta = linspace(0, 2*pi, 100); % Parameterize ellipse
@@ -112,46 +101,42 @@ function plotEllipse(center, ellipseMatrix)
          '-k', 'LineWidth', 1.2);  
 end
 
-% Function to visualize a 3D ellipsoid
-function plotEllipsoid(center, ellipsoidMatrix, color)
-
-    if nargin < 3 %assume a default color
-        color = 'blue';
-    end
-
-    % Check if M is positive definite
-    %if ~all(eig(ellipsoidMatrix) > 0)
-    %    error('Matrix M must be positive definite.');
-    %end
-
-    % Generate grid points on a unit sphere
-    [X, Y, Z] = sphere(50); % Sphere with 50 x 50 resolution
-    P = [X(:), Y(:), Z(:)]'; % Points on the unit sphere (3 x N)
-
-    % Transform the unit sphere into the ellipsoid
-    % Ellipsoid equation: (x - x_c)' * M * (x - x_c) = 1
-    % Transform: M^(-1/2) * P
-    M_inv_sqrt = sqrtm(inv(ellipsoidMatrix)); % Compute M^(-1/2)
-    EllipsoidPoints = M_inv_sqrt * P; % Scale points
-
-    % Translate the ellipsoid to the center x_c
-    for i = 1:size(EllipsoidPoints, 2)
-        EllipsoidPoints(:, i) = EllipsoidPoints(:, i) + center; % Add x_c to each column
-    end
-
-    % Reshape points for surface plot
-    X_e = reshape(EllipsoidPoints(1, :), size(X));
-    Y_e = reshape(EllipsoidPoints(2, :), size(Y));
-    Z_e = reshape(EllipsoidPoints(3, :), size(Z));
-
-    % Plot the ellipsoid
-    surf(X_e, Y_e, Z_e, 'FaceColor', color, 'EdgeColor', 'none', 'FaceAlpha', 0.1);
-    axis equal;
-    xlabel('p_x'); ylabel('p_y'); zlabel('\theta');
-    grid on;
-    hold on;
-end
-
-
-
-
+% % Function to visualize a 3D ellipsoid
+% function plotEllipsoid(center, ellipsoidMatrix, color)
+% 
+%     if nargin < 3 %assume a default color
+%         color = 'blue';
+%     end
+% 
+%     % Check if M is positive definite
+%     %if ~all(eig(ellipsoidMatrix) > 0)
+%     %    error('Matrix M must be positive definite.');
+%     %end
+% 
+%     % Generate grid points on a unit sphere
+%     [X, Y, Z] = sphere(50); % Sphere with 50 x 50 resolution
+%     P = [X(:), Y(:), Z(:)]'; % Points on the unit sphere (3 x N)
+% 
+%     % Transform the unit sphere into the ellipsoid
+%     % Ellipsoid equation: (x - x_c)' * M * (x - x_c) = 1
+%     % Transform: M^(-1/2) * P
+%     M_inv_sqrt = sqrtm(inv(ellipsoidMatrix)); % Compute M^(-1/2)
+%     EllipsoidPoints = M_inv_sqrt * P; % Scale points
+% 
+%     % Translate the ellipsoid to the center x_c
+%     for i = 1:size(EllipsoidPoints, 2)
+%         EllipsoidPoints(:, i) = EllipsoidPoints(:, i) + center; % Add x_c to each column
+%     end
+% 
+%     % Reshape points for surface plot
+%     X_e = reshape(EllipsoidPoints(1, :), size(X));
+%     Y_e = reshape(EllipsoidPoints(2, :), size(Y));
+%     Z_e = reshape(EllipsoidPoints(3, :), size(Z));
+% 
+%     % Plot the ellipsoid
+%     surf(X_e, Y_e, Z_e, 'FaceColor', color, 'EdgeColor', 'none', 'FaceAlpha', 0.1);
+%     axis equal;
+%     xlabel('p_x'); ylabel('p_y'); zlabel('\theta');
+%     grid on;
+%     hold on;
+% end

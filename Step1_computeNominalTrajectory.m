@@ -39,7 +39,7 @@ end
 %% Nominal trajectory and nominal/open-loop control input (feedforward term)
 
 tic
-[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N, cartPoleParameters);
+[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N);
 toc   
 
 disp('Finshed computing nominal trajectory and nominal (feedforward) input tape');
@@ -161,7 +161,7 @@ function plotPolePosition(x_opt, params)
     
     % Set reasonable axis limits
     x_range = [min([cart_x, pole_tip_x]) - 0.2, max([cart_x, pole_tip_x]) + 0.2];
-    y_range = [min(pole_tip_y) - 0.1, max(pole_tip_y) + 0.1];
+    y_range = [-L*1.2, L*1.2];
     xlim(x_range); ylim(y_range);
 end
 
@@ -261,8 +261,8 @@ function animate_cartpole_trajectory(t_opt, x_opt, params)
     end
     
     % Final message
-    if ishandle(h_cart)
-        title('Cartpole Swing-Up Complete!');
-    end
+    %if ishandle(h_cart)
+    %    title('Cartpole Swing-Up Complete!');
+    %end
 
 end

@@ -1,5 +1,7 @@
 clc; clearvars; close all;
 
+%parpool; %initialise parallel processing %if clusters available and toolboox installed
+
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
 %      However, the executed scripts will assume some default input values
 %WARNING: Will have to use the same variable names as below if we want to
@@ -11,8 +13,11 @@ addpath('./lib/');
 %% [INPUT] specify initial and final state: [pos, vel, theta, omega]
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
-initialState = [0; 0; 0; 0;];   % initial state: at origin, vertically down
-finalState   = [1; 0; pi; 0;];   % desired final state
+initialState = [0; 0; pi; 0;];   % initial state: at origin, vertically down
+finalState   = [3; 0; pi; 0;];   % desired final state
+
+%modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
+%theta constraints accordingly (based on whether it's upright or hanging down)
 
 %% Specify Cart-Pole Parameters (not defining these will result in an error)
 
@@ -29,7 +34,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 maxTimeHorizon = 10;
 numTimeSteps = 50;         % number of time samples
 
-drawFlag = 0; % 1: if you want to plot results, 0: otherwise
+drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -37,6 +42,8 @@ disp('- - - - - - -'); disp(" ");
 load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
+
+keyboard
 
 %% Design a time-varying LQR feedback controller
 
@@ -88,7 +95,7 @@ clearvars; close all;
 keyboard;
 
 %specify SOS program hyperparameters
-maxIter = 1; %maximum number of iterations
+maxIter = 2; %maximum number of iterations
 rhoGuessChoice = 'const'; %options: 'const' [DEFAULT] and 'exp'
                           %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
 % Option1: constant rho_guess
@@ -103,6 +110,7 @@ run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
+close all
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
