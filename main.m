@@ -12,7 +12,7 @@ addpath('./lib/');
 % Convention: theta = pi/2 -- North, 0 -- East
 
 initialState = [0; 0; pi/2;];   % initial state: at origin facing North
-finalState   = [2; 5; pi/2;];   % desired final state
+finalState   = [-1; 3; pi/2;];   % desired final state
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
@@ -48,6 +48,7 @@ startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
 
+keyboard
 %% [Optional] Load all the saved files for further analysis
 
 clearvars; %close all;
@@ -88,9 +89,10 @@ run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
+tic
 close all
 run("./utils/plottingScript.m");
-
+toc
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
 
 %startTimeIndex = 1;
@@ -135,7 +137,7 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     projectionDims = [1 2];
 
     %plot ellipsoidal invariant sets in 2D
-    for k=1:1:length(x_nom)
+    for k=1:length(x_nom)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
         %center = x_nom(:,k);

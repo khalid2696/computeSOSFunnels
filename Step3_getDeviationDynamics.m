@@ -77,7 +77,7 @@ disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
 
 systemPolyDynamics = cell(1,N);
-for k = 1:N %length of time samples
+parfor k = 1:N %length of time samples
 
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
@@ -104,11 +104,12 @@ disp('Computing state deviation dynamics at each nominal state-input pair');
 disp(' ');
 
 deviationDynamics = cell(1,N);
-for k = 1:N %length of time samples
+parfor k = 1:N %length of time samples
     
     nom_state = x_nom(:, k);
     nom_input = u_nom(:, k);
     controlGainMatrix = K(:, :, k);
+    sym_polyDynamics_at_a = systemPolyDynamics{k};
     
     %deviation_dynamics: polynomial function in terms of xbar (deviations) ONLY
     %symVars --> (symbolic) [x; u]
@@ -191,16 +192,12 @@ function taylor_approx = taylor_expansion(f, vars, a, order)
     % Iterate over each term in the vector-valued function f
     for i = 1:length(f)
 
-        i
-
         % Initialize the Taylor expansion for the i-th component
         f_i_taylor = subs(f(i), vars, a); % Zeroth-order term (f(a))
         
         % Add higher-order terms iteratively
         for k = 1:order
-            
-            k
-
+          
             term = 0; % Initialize the term of order k
             
             % Iterate over all multi-index combinations for the current order

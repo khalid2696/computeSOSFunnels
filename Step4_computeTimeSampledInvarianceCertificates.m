@@ -206,7 +206,7 @@ for iter=1:maxIter
     %assigning values for next iteration
     prevRhoScaling = currRhoScaling;
     currRhoScaling = (1 + rhoStepUpValue)*prevRhoScaling;
-    %currRhoScaling = rhoScaleIncrements.*prevRhoScaling;
+    %currRhoScaling = rhoScaleIncrements.*prevRhoScalintocg;
 
     startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/(1 + rhoStepUpValue); %increasing the inlet volume
     
@@ -265,7 +265,8 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     %initialise the SOS program
     prog = sosprogram(xbar);
     
-    for k = 2:1:N 
+    for k = 2:1:N
+    %parfor k = 2:N
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -524,7 +525,7 @@ function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
     grid on; 
     axis equal;
     
-    for k=1:1:length(x_nom)
+    for k=1:length(x_nom)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
         M_xy = project_ellipsoid_matrix(M, [1 2]);
         center = x_nom(:,k);

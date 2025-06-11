@@ -37,7 +37,7 @@ function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
     grid on; 
     axis equal;
     
-    for k=1:1:length(x_nom)
+    for k=1:length(x_nom)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
         M_xy = project_ellipsoid_matrix(M, [1 2]);
         center = x_nom(:,k);
