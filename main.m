@@ -1,5 +1,5 @@
 clc; clearvars; close all;
-
+    
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
 %      However, the executed scripts will assume some default input values
 %WARNING: Will have to use the same variable names as below if we want to
@@ -11,7 +11,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [3; -2; 2; 0; 0; 0];   % desired final pose
+finalPose   = [2; 4; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.5;        % mass (kg)
@@ -74,7 +74,7 @@ terminalRegionScaling = 20; % Terminal constraint cost
 % Thrust weight (0.1): Low because thrust changes are energetically cheap
 % Moment weights (10, 10, 20): Higher because moments require more energy and we want smooth attitude control
 
-run("Step2_FeedbackControllerSythesis.m");
+run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
@@ -103,6 +103,7 @@ plotOneLevelSet_3D(x_nom, P);
 keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
+order = 3; %order of Taylor expansion
 run("Step3_getDeviationDynamics.m");
 %Note: comment out lines 109-112 of the above script 
 %      if you don't want to double-check that xbar_dot(0) = 0 at each t = t_k
