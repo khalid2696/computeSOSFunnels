@@ -34,7 +34,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 maxTimeHorizon = 10;
 numTimeSteps = 50;         % number of time samples
 
-drawFlag = 1; % 1: if you want to plot results, 0: otherwise
+%drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -43,9 +43,10 @@ load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
 
-keyboard
-
 %% Design a time-varying LQR feedback controller
+
+upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
@@ -78,8 +79,8 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 plotOneLevelSet_2D(x_nom, P);
 %plotOneLevelSet_3D(x_nom, P);
-
 keyboard;
+
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
 %order = 3; %order of Taylor expansion
@@ -182,7 +183,7 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     projectionDims = [1 3];
 
     %plot ellipsoidal invariant sets in 2D
-    for k=1:1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
         %center = x_nom(:,k);
@@ -209,7 +210,7 @@ end
 %     projectionDims = [1 2 3];
 % 
 %     %plot ellipsoidal invariant sets in 3D
-%     for k=1:1:length(x_nom)
+%     for k=1:1:size(x_nom,2)
 %         M = ellipsoidMatrix(:,:,k);
 %         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
 %         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
