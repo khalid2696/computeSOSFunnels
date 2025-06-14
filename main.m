@@ -28,6 +28,9 @@ disp('- - - - - - -'); disp(" ");
 
 %% Design a time-varying LQR feedback controller
 
+upsamplingFactor = 10; %finer discretization to prevent integration error build-up
+                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
+
 %Cost matrices
 Q = 0.5*diag([10, 10, 1]); % State cost
 R = 0.5*diag([1, 0.1]); % Control cost
@@ -137,7 +140,7 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     projectionDims = [1 2];
 
     %plot ellipsoidal invariant sets in 2D
-    for k=1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
         %center = x_nom(:,k);
@@ -164,7 +167,7 @@ end
 %     projectionDims = [1 2 3];
 % 
 %     %plot ellipsoidal invariant sets in 3D
-%     for k=1:1:length(x_nom)
+%     for k=1:1:size(x_nom,2)
 %         M = ellipsoidMatrix(:,:,k);
 %         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
 %         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
