@@ -1,4 +1,4 @@
-clc; clearvars; close all
+%clc; clearvars; close all
 
 warning('off','MATLAB:singularMatrix');
 
@@ -54,13 +54,13 @@ goalScaling = 0.8;  %Keep it less than 1
 % can include a binary search to determine a good initial guess -- between 0 and 1
 
 if ~exist('rhoGuessChoice','var')
-    rhoGuessChoice = 'exp'; %options: 'const' or 'exp' (if const doesn't work out)
+    rhoGuessChoice = 'const'; %options: 'const' or 'exp' (if const doesn't work out)
 end 
 
 % Option1: constant rho_guess -- rhoGuessChoice = 'const'
 %[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
 if ~exist('rhoInitialGuessConstant','var')
-    rhoInitialGuessConstant = 1;
+    rhoInitialGuessConstant = 0.1;
 end 
 
 % Option2: Exponentially (quickly) increasing rho_guess -- rhoGuessChoice = 'exp'
@@ -80,6 +80,20 @@ end
                                                                     %options - 'const' (option1) or 'exp' (option2)
 ellipsoidMatrices = P; %initial guess of ellipsoid matrices are the cost-to-go matrices from TVLQR
 
+
+%% Enhanced Robust Initialization
+
+% fprintf('Using enhanced SOS initialization for %s system...\n', 'quadrotor'); % or 'cartpole'
+% 
+% [rhoInitialGuess, candidateV, initSuccess] = robustSOSInitialization(...
+%     xbar, time_instances, P, x_nom, deviationDynamics, 'quadrotor');
+% 
+% if ~initSuccess
+%     warning('Robust initialization could not find feasible initial guess. Proceeding with fallback...');
+% end
+% 
+% ellipsoidMatrices = P; % Use as initial ellipsoid guess
+
 %% Define the intial and final regions
 
 goalRegionEllipsoidMatrix = goalScaling*P(:,:,end)/rhoInitialGuess(end);
@@ -98,15 +112,16 @@ title('Initial guess funnel');
 plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
 plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 
+drawnow
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+%plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+%plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+%plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
@@ -524,7 +539,7 @@ function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
     grid on; 
     axis equal;
     
-    for k=1:1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
         M_xy = project_ellipsoid_matrix(M, [1 2]);
         center = x_nom(:,k);

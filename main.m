@@ -1,5 +1,7 @@
 clc; clearvars; close all;
-    
+
+%parpool; %initialise parallel processing %if clusters available and toolboox installed
+
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
 %      However, the executed scripts will assume some default input values
 %WARNING: Will have to use the same variable names as below if we want to
@@ -31,6 +33,9 @@ run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Design a time-varying LQR feedback controller
+
+upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
@@ -117,14 +122,14 @@ keyboard;
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
-rhoGuessChoice = 'const'; %options: 'const' [DEFAULT] and 'exp'
+rhoGuessChoice = 'exp'; %options: 'const' [DEFAULT] and 'exp'
                           %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
 % Option1: constant rho_guess
-rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails, 
+rhoInitialGuessConstant = 2; %[TUNEABLE] decrease value if initial guess fails, 
                                %keep value between 0 and 1
 
 % Option2: Exponentially (quickly) increasing rho_guess 
-rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
+rhoInitialGuessExpCoeff = 0.5; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
 run("Step4_computeTimeSampledInvarianceCertificates.m");
@@ -219,7 +224,7 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
     projectionDims = [1 2];
 
     %plot ellipsoidal invariant sets in 2D
-    for k=1:1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
         %center = x_nom(:,k);
@@ -246,7 +251,7 @@ function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
     projectionDims = [1 2 3];
     
     %plot ellipsoidal invariant sets in 3D
-    for k=1:1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
