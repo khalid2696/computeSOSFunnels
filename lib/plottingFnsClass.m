@@ -79,10 +79,6 @@ classdef plottingFnsClass
         
             % Plot the ellipsoid
             surf(X_e, Y_e, Z_e, 'FaceColor', color, 'EdgeColor', 'none', 'FaceAlpha', 0.1);
-            axis equal;
-            xlabel('p_x'); ylabel('p_y'); zlabel('\theta');
-            grid on;
-            hold on;
         end
     end
 end
