@@ -102,8 +102,13 @@ addpath('./lib/');
 load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
-plotOneLevelSet_2D(x_nom, P);
-plotOneLevelSet_3D(x_nom, P);
+%following functions can take in an additional (optional) argument
+%specifiying the projection dimensions - for example: [1 2], [1 3], etc.
+projectionDims_2D = [1 2];
+plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
+
+projectionDims_3D = [1 2 3];
+plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
 
 keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
@@ -216,20 +221,20 @@ function f = quadrotor_dynamics(x, u, quadParameters)
     ];
 end
 
-function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
+function plotOneLevelSet_2D(x_nom, ellipsoidMatrix, projectionDims)
     figure; hold on; grid on; axis equal;
 
     P = plottingFnsClass();
     
-    projectionDims = [1 2];
+    if nargin < 3
+        projectionDims = [1 2]; %if not specified, by default x-y projection
+    end
 
     %plot ellipsoidal invariant sets in 2D
     for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
-        %center = x_nom(:,k);
         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
-        %plotEllipse(center, M_xy);
         P.plotEllipse(center, M_xy);
     end 
     
@@ -238,17 +243,19 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
 
     %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('p_y');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
 end
 
-function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
+function plotOneLevelSet_3D(x_nom, ellipsoidMatrix, projectionDims)
     figure; view(3);
     hold on; grid on; axis equal;
 
     P = plottingFnsClass();
 
-    projectionDims = [1 2 3];
+    if nargin < 3
+        projectionDims = [1 2 3]; %if not specified, by default x-y-z projection
+    end
     
     %plot ellipsoidal invariant sets in 3D
     for k=1:1:size(x_nom,2)
@@ -263,7 +270,7 @@ function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
 
     %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('p_y');
-    zlabel('p_z');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    zlabel(['x_{', num2str(projectionDims(3)), '}'])
 end
