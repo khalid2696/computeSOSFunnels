@@ -14,7 +14,7 @@ addpath('./lib/');
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
 initialState = [0; 0; pi; 0;];   % initial state: at origin, vertically down
-finalState   = [3; 0; pi; 0;];   % desired final state
+finalState   = [-3; 0; pi; 0;];   % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
 %theta constraints accordingly (based on whether it's upright or hanging down)
@@ -69,17 +69,23 @@ startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
 
+keyboard
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; %close all;
+clearvars; close all;
 addpath('./lib/');
 
 load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
-plotOneLevelSet_2D(x_nom, P);
-%plotOneLevelSet_3D(x_nom, P);
-keyboard;
+%following functions can take in an additional (optional) argument
+%specifiying the projection dimensions - for example: [1 2], [1 3], etc.
+projectionDims_2D = [1 3];
+plotOneLevelSet_2D(x_nom, P, projectionDims_2D); 
+axis normal
+
+plotOneLevelSet_3D(x_nom, P);
+daspect([1 1 0.5]);
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
@@ -112,6 +118,8 @@ disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
 close all
+
+projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
@@ -175,20 +183,20 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     ];
 end
 
-function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
-    figure; hold on; grid on; %axis equal;
+function plotOneLevelSet_2D(x_nom, ellipsoidMatrix, projectionDims)
+    figure; hold on; grid on; axis equal;
 
     P = plottingFnsClass();
     
-    projectionDims = [1 3];
+    if nargin < 3
+        projectionDims = [1 2]; %if not specified, by default x-y projection
+    end
 
     %plot ellipsoidal invariant sets in 2D
     for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k);
         M_xy = P.project_ellipsoid_matrix_2D(M, projectionDims);
-        %center = x_nom(:,k);
         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
-        %plotEllipse(center, M_xy);
         P.plotEllipse(center, M_xy);
     end 
     
@@ -197,32 +205,34 @@ function plotOneLevelSet_2D(x_nom, ellipsoidMatrix)
 
     %formatting
     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('\theta');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
 end
 
-% function plotOneLevelSet_3D(x_nom, ellipsoidMatrix)
-%     figure; view(3);
-%     hold on; grid on; %axis equal;
-% 
-%     P = plottingFnsClass();
-% 
-%     projectionDims = [1 2 3];
-% 
-%     %plot ellipsoidal invariant sets in 3D
-%     for k=1:1:size(x_nom,2)
-%         M = ellipsoidMatrix(:,:,k);
-%         M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
-%         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
-%         P.plotEllipsoid(center, M_xyz);
-%     end 
-% 
-%     %nominal trajectory
-%     plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
-% 
-%     %formatting
-%     title('1-level set of cost-to-go matrices P, along the nominal trajectory');
-%     xlabel('p_x');
-%     ylabel('v_x');
-%     zlabel('\theta');
-% end
+function plotOneLevelSet_3D(x_nom, ellipsoidMatrix, projectionDims)
+    figure; view(3);
+    hold on; grid on; axis equal;
+
+    P = plottingFnsClass();
+
+    if nargin < 3
+        projectionDims = [1 2 3]; %if not specified, by default x-y-z projection
+    end
+    
+    %plot ellipsoidal invariant sets in 3D
+    for k=1:1:size(x_nom,2)
+        M = ellipsoidMatrix(:,:,k);
+        M_xyz = P.project_ellipsoid_matrix_3D(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k), x_nom(projectionDims(3),k)]';
+        P.plotEllipsoid(center, M_xyz);
+    end 
+    
+    %nominal trajectory
+    plot3(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),x_nom(projectionDims(3),:),'--b');
+
+    %formatting
+    title('1-level set of cost-to-go matrices P, along the nominal trajectory');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    zlabel(['x_{', num2str(projectionDims(3)), '}'])
+end
