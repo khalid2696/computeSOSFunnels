@@ -66,7 +66,17 @@ end
 if ~exist('P_f','var')
     [~, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom(:,end), u_nom(:,end), Q, R);
     P_f = S_f*terminalRegionScaling;
+    %P_f = Q*terminalRegionScaling;
 end
+
+%%
+% Assume you already have: f, x, u, x_nom, u_nom, Q, R, Qf, tf
+%[K, P, T] = compute_continuous_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, P_f, time_instances(end), time_instances(1));
+
+Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
+
+% Inputs: f, x, u, x_nom, u_nom, Q, R, Qf, dt
+[K_cont, P_cont] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, P_f, Ts, 'continuous');
 
 %% Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
 
@@ -81,21 +91,35 @@ t_fine = linspace(time_instances(1), time_instances(end), Nd);
 %% Compute time-sampled TVLQR Gains on a finer discretization
 
 Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
-[K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts);
+[K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'discrete');
 
 %% Downsample the trajectories, inputs, cost and gain matrices to match the original time samples
 
 [x_nom, u_nom] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, time_instances);
 
-K = downsample_matrix(K_fine, t_fine, time_instances);
-P = downsample_matrix(P_fine, t_fine, time_instances);
+K_disc = downsample_matrix(K_fine, t_fine, time_instances);
+P_disc = downsample_matrix(P_fine, t_fine, time_instances);
+
+
+%% compare the two methods
+
+compare_matrices(K_disc, P_disc, K_cont, P_cont, Ts)
+compare_tvlqr_methods(K_disc, P_disc, K_cont, P_cont, Ts)
+
+%keyboard
+
+%contnuous time implementation seems to be more versatile and robust
+%because it uses in-built matlab functions and is independennt of the
+%sampling time (esp. relevant for stiff problem such as diff. Riccati equation)
+K = K_cont;
+P = P_cont;
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
 f_sym = f;
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P' , 'f_sym');
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P', 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
@@ -205,6 +229,160 @@ function M_fine = upsample_matrix(M_coarse, t_coarse, t_fine)
         end
     end
 end
+
+
+%% Matrix comparisons
+
+% function compare_tvlqr_methods(K_disc, P_disc, K_cont, P_cont, dt)
+%     N = size(P_disc, 3);
+%     t = (0:N-1) * dt;
+% 
+%     figure('Name','TVLQR Gain Comparison','NumberTitle','off');
+% 
+%     % Compare selected K gains
+%     subplot(2,1,1);
+%     plot(t, squeeze(K_disc(1,1,:)), 'r--', 'LineWidth', 1.5); hold on;
+%     plot(t, squeeze(K_cont(1,1,:)), 'b-', 'LineWidth', 1.5);
+%     legend('Discrete K(1,1)', 'Continuous K(1,1)', 'Location', 'Best');
+%     title('TVLQR Feedback Gain K(1,1) Comparison');
+%     xlabel('Time [s]');
+%     ylabel('Gain Value');
+%     grid on;
+% 
+%     subplot(2,1,2);
+%     plot(t, squeeze(K_disc(1,2,:)), 'r--', 'LineWidth', 1.5); hold on;
+%     plot(t, squeeze(K_cont(1,2,:)), 'b-', 'LineWidth', 1.5);
+%     legend('Discrete K(1,2)', 'Continuous K(1,2)', 'Location', 'Best');
+%     title('TVLQR Feedback Gain K(1,2) Comparison');
+%     xlabel('Time [s]');
+%     ylabel('Gain Value');
+%     grid on;
+% 
+%     figure('Name','TVLQR Cost-to-Go P Comparison','NumberTitle','off');
+% 
+%     % Compare selected P entries
+%     subplot(2,1,1);
+%     plot(t, squeeze(P_disc(1,1,:)), 'r--', 'LineWidth', 1.5); hold on;
+%     plot(t, squeeze(P_cont(1,1,:)), 'b-', 'LineWidth', 1.5);
+%     legend('Discrete P(1,1)', 'Continuous P(1,1)', 'Location', 'Best');
+%     title('Cost-to-Go P(1,1) Comparison');
+%     xlabel('Time [s]');
+%     ylabel('Value');
+%     grid on;
+% 
+%     subplot(2,1,2);
+%     plot(t, squeeze(P_disc(2,2,:)), 'r--', 'LineWidth', 1.5); hold on;
+%     plot(t, squeeze(P_cont(2,2,:)), 'b-', 'LineWidth', 1.5);
+%     legend('Discrete P(2,2)', 'Continuous P(2,2)', 'Location', 'Best');
+%     title('Cost-to-Go P(2,2) Comparison');
+%     xlabel('Time [s]');
+%     ylabel('Value');
+%     grid on;
+% end
+
+function compare_tvlqr_methods(K_disc, P_disc, K_cont, P_cont, dt)
+    N = size(P_disc, 3);
+    t = (0:N-1) * dt;
+    
+    % Determine dimensions for K (m x n)
+    [m, n] = size(K_disc(:,:,1));
+    
+    % Create figure for K matrix comparisons
+    figure('Name', 'TVLQR Gain Comparison', 'NumberTitle', 'off');
+    for i = 1:m
+        for j = 1:n
+            subplot(m, n, (i-1)*n + j);
+            plot(t, squeeze(K_disc(i,j,:)), 'r--', 'LineWidth', 1.5); 
+            hold on;
+            plot(t, squeeze(K_cont(i,j,:)), 'b-', 'LineWidth', 1.5);
+            legend(...
+                'Discrete', 'Continuous', ...
+                'Location', 'Best');
+            title(['K(' num2str(i) ',' num2str(j) ')']);
+            xlabel('Time [s]');
+            ylabel('');
+            grid on;
+        end
+    end
+    
+    % Determine dimensions for P (n x n)
+    [n_p, ~] = size(P_disc(:,:,1));
+    
+    % Create figure for P matrix comparisons
+    figure('Name', 'TVLQR Cost-to-Go Comparison', 'NumberTitle', 'off');
+    for i = 1:n_p
+        for j = 1:n_p
+            subplot(n_p, n_p, (i-1)*n_p + j);
+            plot(t, squeeze(P_disc(i,j,:)), 'r--', 'LineWidth', 1.5); 
+            hold on;
+            plot(t, squeeze(P_cont(i,j,:)), 'b-', 'LineWidth', 1.5);
+            legend(...
+                'Discrete', 'Continuous', ...
+                'Location', 'Best');
+            title(['P(' num2str(i) ',' num2str(j) ')']);
+            xlabel('Time [s]');
+            ylabel('');
+            grid on;
+        end
+    end
+end
+
+
+function compare_matrices(K_disc, P_disc, K_cont, P_cont, dt)
+    N = size(P_disc, 3);
+    t = (0:N-1) * dt;
+
+    % === Frobenius Norm Errors ===
+    P_err = zeros(1,N);
+    K_err = zeros(1,N);
+    for k = 1:N
+        P_err(k) = norm(P_disc(:,:,k) - P_cont(:,:,k), 'fro');
+        K_err(k) = norm(K_disc(:,:,k) - K_cont(:,:,k), 'fro');
+    end
+
+    figure('Name','TVLQR Matrix Norm Differences','NumberTitle','off');
+    subplot(2,1,1);
+    plot(t, P_err, 'LineWidth', 1.5);
+    title('‖P_{disc} - P_{cont}‖_F over time');
+    xlabel('Time [s]'); ylabel('Frobenius Norm'); grid on;
+
+    subplot(2,1,2);
+    plot(t, K_err, 'LineWidth', 1.5);
+    title('‖K_{disc} - K_{cont}‖_F over time');
+    xlabel('Time [s]'); ylabel('Frobenius Norm'); grid on;
+
+    % === Trace Comparison ===
+    trace_disc = zeros(1,N);
+    trace_cont = zeros(1,N);
+    for k = 1:N
+        trace_disc(k) = trace(P_disc(:,:,k));
+        trace_cont(k) = trace(P_cont(:,:,k));
+    end
+
+    figure('Name','Trace of P Comparison','NumberTitle','off');
+    plot(t, trace_disc, 'r--', 'LineWidth', 1.5); hold on;
+    plot(t, trace_cont, 'b-', 'LineWidth', 1.5);
+    legend('tr(P_{disc})','tr(P_{cont})', 'Location','Best');
+    title('Trace of Cost-to-Go Matrix P(t)');
+    xlabel('Time [s]'); ylabel('Trace'); grid on;
+
+    % === Eigenvalue Comparison at Select Time Steps ===
+    sel_idx = round(linspace(1, N, 3)); % [start, middle, end]
+    figure('Name','Eigenvalues of P(t) Comparison','NumberTitle','off');
+    for i = 1:3
+        idx = sel_idx(i);
+        eig_disc = sort(eig(P_disc(:,:,idx)), 'descend');
+        eig_cont = sort(eig(P_cont(:,:,idx)), 'descend');
+
+        subplot(1,3,i);
+        plot(1:length(eig_disc), eig_disc, 'ro-', 'LineWidth', 1.5); hold on;
+        plot(1:length(eig_cont), eig_cont, 'bs--', 'LineWidth', 1.5);
+        title(sprintf('Eigenvalues at t = %.2f s', t(idx)));
+        legend('disc','cont','Location','Best');
+        xlabel('Index'); ylabel('Eigenvalue'); grid on;
+    end
+end
+
 
 %% Usage Note:
 %Vq = interp1(X,V,Xq) %interpolates to find Vq, the values of the

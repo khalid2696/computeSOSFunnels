@@ -183,6 +183,9 @@ for iter=1:maxIter
         V_polyFn = sol_candidateVArray{k};
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
+
+        disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+        disp(' ');
     end
 
     if ~infeasibilityStatus
@@ -488,7 +491,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         
     end
 
-    rhoGuess(end) = 1;
+    %rhoGuess(end) = 1;
 
 end
 
@@ -516,6 +519,44 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     end
     
     M = full(M);
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
 end
 
 %% Plotting functions

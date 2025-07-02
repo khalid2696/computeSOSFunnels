@@ -1,4 +1,5 @@
 clc; clearvars; close all;
+%parpool %for parallel processing
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
 %      However, the executed scripts will assume some default input values
@@ -11,8 +12,8 @@ addpath('./lib/');
 %% [INPUT] specify initial and final state: [pos_x, pos_y, theta]
 % Convention: theta = pi/2 -- North, 0 -- East
 
-initialState = [0; 0; pi/2;];   % initial state: at origin facing North
-finalState   = [-1; 3; pi/2;];   % desired final state
+initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
+finalState   = [2; 5; pi/2;];   % desired final state
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
@@ -22,20 +23,21 @@ dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
 maxTimeHorizon = 10;
 numTimeSteps = 25;         % number of time samples
 
-drawFlag = 1; %uncomment this if you want to plot results
+drawFlag = 0; %uncomment this if you want to plot results
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
+%keyboard
 %% Design a time-varying LQR feedback controller
 
 upsamplingFactor = 10; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
-Q = 0.5*diag([10, 10, 1]); % State cost
-R = 0.5*diag([1, 0.1]); % Control cost
+Q = 0.1*diag([10, 10, 1]); % State cost
+R = diag([1, 0.5]); % Control cost
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 10; % Terminal constraint cost
+terminalRegionScaling = 1; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
@@ -43,15 +45,17 @@ terminalRegionScaling = 10; % Terminal constraint cost
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
+drawnow
+%keyboard
+
 %% Optionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
 close all;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
+startMaxPerturbation = 1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-run("./utils/checkClosedLoop_MCRollouts.m");
-
-keyboard
+%run("./utils/checkClosedLoop_MCRollouts.m");
+%keyboard
 
 %% [Optional] Load all the saved files for further analysis
 
@@ -69,6 +73,13 @@ plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
 plotOneLevelSet_3D(x_nom, P);
 daspect([1 1 2]);
 
+%for k=1:length(time_instances)
+%    disp(matrix_condition_number(P(:,:,k)));
+%    disp(' ');
+%end
+
+keyboard
+
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
 run("Step3_getDeviationDynamics.m");
@@ -80,21 +91,26 @@ disp('- - - - - - -'); disp(" ");
 %% Time-conditioned invariant set analysis (with time-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clearvars; close all; 
-keyboard;
+%keyboard;
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
-rhoGuessChoice = 'const'; %options: 'const' [DEFAULT] and 'exp'
+rhoGuessChoice = 'exp'; %options: 'const' [DEFAULT] and 'exp'
                           %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
 % Option1: constant rho_guess
-rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.05; %[TUNEABLE] decrease value if initial guess fails, 
                                %keep value between 0 and 1
 
 % Option2: Exponentially (quickly) increasing rho_guess 
-rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
+rhoInitialGuessExpCoeff = -2; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
-run("Step4_computeTimeSampledInvarianceCertificates.m");
+try                               
+    run("Step4_computeTimeSampledInvarianceCertificates.m");
+catch
+    disp('Could not find a successful initial guess to start the alternation scheme!');
+end
+
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
@@ -138,6 +154,44 @@ function f = unicycle_dynamics(x, u)
     f = [u(1) * cos(x(3)); ...  % x_dot
          u(1) * sin(x(3)); ...  % y_dot
          u(2)];                % theta_dot
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
 end
 
 function plotOneLevelSet_2D(x_nom, ellipsoidMatrix, projectionDims)

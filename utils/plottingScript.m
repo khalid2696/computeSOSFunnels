@@ -41,7 +41,7 @@ funnelInlet = ellipsoidMatrices(:,:,1)/rhoScaling(1);
 plotInitialSet_3D(x_nom(:,1), funnelInlet, projectionDims_3D);
 
 funnelOutlet = ellipsoidMatrices(:,:,end)/rhoScaling(end);
-plotFinalSet_3D(x_nom(:,end), funnelOutlet, projectionDims_3D);
+plotFinalSet_3D(x_nom(:,end), funnelInlet, projectionDims_3D);
 
 %formatting
 title('3-D Invariant Ellipsoidal Sets');
