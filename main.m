@@ -34,7 +34,7 @@ disp('- - - - - - -'); disp(" ");
 
 %% Design a time-varying LQR feedback controller
 
-upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+upsamplingFactor = 10; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
@@ -56,7 +56,7 @@ R = diag([
     50  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 20; % Terminal constraint cost
+terminalRegionScaling = 1; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
@@ -79,6 +79,9 @@ terminalRegionScaling = 20; % Terminal constraint cost
 % Thrust weight (0.1): Low because thrust changes are energetically cheap
 % Moment weights (10, 10, 20): Higher because moments require more energy and we want smooth attitude control
 
+%for the above cost matrices, discrete time recursion seems to work better
+%than continous time DRE (in-built solvers). This might change with
+%different choice of (less aggressive) matrices!
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -90,7 +93,7 @@ keyboard;
 
 close all;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1; %a measure of max initial perturbations to state
+startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
 
@@ -120,27 +123,29 @@ run("Step3_getDeviationDynamics.m");
 
 disp('- - - - - - -'); disp(" ");
 
-%% Time-conditioned invariant set analysis (with time-dependance)
+%% Time-conditioned invariant set analysis (with temporal-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clearvars; close all; 
-keyboard;
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
 rhoGuessChoice = 'exp'; %options: 'const' [DEFAULT] and 'exp'
                           %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
 % Option1: constant rho_guess
-rhoInitialGuessConstant = 2; %[TUNEABLE] decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.01; %[TUNEABLE] decrease value if initial guess fails, 
                                %keep value between 0 and 1
 
 % Option2: Exponentially (quickly) increasing rho_guess 
-rhoInitialGuessExpCoeff = 0.5; %[TUNEABLE] increase value if initial guess fails
+rhoInitialGuessExpCoeff = 1; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
+close all
+
+projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 

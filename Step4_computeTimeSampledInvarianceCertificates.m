@@ -1,5 +1,6 @@
 %clc; clearvars; close all
 
+%keyboard
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
