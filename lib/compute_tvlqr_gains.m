@@ -1,4 +1,9 @@
 function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Pf, dt, method)
+%f: symbolic nonlinear dynamics function depending on symbolic x and symbolic u
+    
+    if nargin < 10
+        method = 'continuous'; %by default, use continuous-time equations for better numerical results
+    end
 
     N = size(x_nom, 2);
     nx = length(x);
@@ -70,81 +75,28 @@ function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Pf, dt, metho
     end
 end
 
+% Differential Riccati equation, returns Pdot in vector format
 function P_dot_vec = dre_rhs(t, Pvec, A_interp, B_interp, Q, R, n)
     P = reshape(Pvec, n, n);
     A = squeeze(A_interp(t));
     B = squeeze(B_interp(t));
+
     P_dot = -(P*A + A'*P - P*B*(R\(B'))*P + Q);
-    P_dot_vec = reshape(P_dot, [], 1);
+    
+    % Vectorize the nxn matrix to n^2 x 1 vector (to use it with in-built ode solvers) 
+    P_dot_vec = reshape(P_dot, [], 1);  
 end
 
+% Computes symbolic Jacobians A and B from the dynamics x_dot = f(x, u)
 function [A_sym, B_sym] = compute_symbolic_jacobians(f, x, u)
     A_sym = jacobian(f, x);
     B_sym = jacobian(f, u);
 end
 
+% An infinite horizon LQR to stabilize the closed loop system at the terminal state
 function [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom_f, u_nom_f, Q, R)
     [A_sym, B_sym] = compute_symbolic_jacobians(f, x, u);
     A_f = double(subs(A_sym, [x; u], [x_nom_f; u_nom_f]));
     B_f = double(subs(B_sym, [x; u], [x_nom_f; u_nom_f]));
     [K_f, S_f, ~] = lqr(A_f, B_f, Q, R);
 end
-
-% 
-% %f: symbolic nonlinear dynamics function depending on symbolic x and symbolic u
-% function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Qf, dt)
-%     % Computes TVLQR gains using backward Riccati recursion
-%     N = size(x_nom, 2); %getting the number of discrete time-steps
-%     nx = length(x);
-%     nu = length(u);
-% 
-%     P = zeros(nx, nx, N);
-%     K = zeros(nu, nx, N);
-% 
-%     [K_f, ~] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom(:,end), u_nom(:,end), Q, R);
-%     K(:,:,N) = K_f; %terminal gain
-%     P(:,:,N) = Qf;  %terminal cost matrix
-% 
-%     [A_sym, B_sym] = compute_symbolic_jacobians(f, x, u);
-% 
-%     for k = N-1:-1:1
-% 
-%         % Get the value of the nominal trajectory and input at t=k
-%         x0_k = x_nom(:,k);
-%         u0_k = u_nom(:,k);
-% 
-%         %Get the linearised matrices (Jacobians) at nominal trajectory
-%         A_k = double(subs(A_sym, [x; u], [x0_k; u0_k]));
-%         B_k = double(subs(B_sym, [x; u], [x0_k; u0_k]));
-% 
-%         %discrete-time system matrices
-%         Ad_k = eye(nx) + dt * A_k;
-%         Bd_k = dt * B_k;
-% 
-%         % Backward Riccati recursion
-%         P_k = P(:, :, k+1);
-%         S = R + Bd_k' * P_k * Bd_k;
-%         K(:, :, k) = S \ (Bd_k' * P_k * Ad_k); % K_k = inv(S) * (B' * P_k * A)
-%         P(:, :, k) = Q + Ad_k' * P_k * Ad_k - Ad_k' * P_k * Bd_k * (S \ (Bd_k' * P_k * Ad_k));
-%     end
-% end
-% 
-% %an infinite horizon LQR to stabilize the closed loop system at the terminal state
-% function [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom_f, u_nom_f, Q, R)
-% 
-%     [A_sym, B_sym] = compute_symbolic_jacobians(f, x, u);
-% 
-%     %Get the linearised matrices (Jacobians) at terminal state
-%     A_f = double(subs(A_sym, [x; u], [x_nom_f; u_nom_f]));
-%     B_f = double(subs(B_sym, [x; u], [x_nom_f; u_nom_f]));
-% 
-%     [K_f,S_f,~] = lqr(A_f,B_f,Q,R);
-% end
-% 
-% % Computes symbolic Jacobians A and B from the dynamics x_dot = f(x, u)
-% function [A_sym, B_sym] = compute_symbolic_jacobians(f, x, u)
-% 
-%     % Continuous-time Jacobians
-%     A_sym = jacobian(f, x);
-%     B_sym = jacobian(f, u);
-% end
