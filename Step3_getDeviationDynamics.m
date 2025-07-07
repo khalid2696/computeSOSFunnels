@@ -31,20 +31,19 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 %total control input, u_k = u_nom - K_k delta_x
 %u_k = u_nom(:, k) - K(:, :, k) * (x_traj(:, k) - x_nom(:, k));
 
+%% Inherit parameters if they exist in the wrapper file
+
+if ~exist('order','var')
+    order = 3; %default order of Taylor expansion
+end
+
 %% Symbolic Taylor expansion for any general expansion point 'a'
 
 %create symbolic variables of state and input vector based on the
 %respective dimensionality
 x = createSymbolicVector('x', n); %state vector
 u = createSymbolicVector('u', m); %input vector
-%x = [x1 x2 x3]'; u = [u1 u2]'; %column matrix by convention -- nx1
-
-% Define the system dynamics: x_dot = f(x, u)
-symbolicDynamics = [
-    u(1) * cos(x(3));   % x_dot
-    u(1) * sin(x(3));   % y_dot
-    u(2);               % theta_dot
-];
+%x = [x1 x2 ... xn]'; u = [u1 u2 .. um]'; %column matrix by convention
 
 %define the variables on which the function depends
 symVars = [x; u]; %f(x,u) := f(vars)
@@ -52,33 +51,21 @@ symVars = [x; u]; %f(x,u) := f(vars)
 % Define symbolic expansion point
 expansion_point_varSymbol = 'a';
 expansion_point_a_symbolic = createSymbolicVector(expansion_point_varSymbol, length(symVars));
-%expansion_point_a_symbolic = [a1 a2 a3 a4 a5]'; %column matrix by convention -- nx1
+%expansion_point_a_symbolic = [a1 a2 .. a(n+m)]'; %column matrix by convention -- (n+m)x1
 
-order = 3;
 disp('Hang on..')
 disp(['Polynomializing the system dynamics using Taylor expansion of order ' num2str(order)]);
 disp(' ');
 
-%taylor_approx = taylor_expansion(symbolicDynamics, symVars, expansion_point_a_symbolic, order);
+%taylor_approx = taylor_expansion(f_sym, symVars, expansion_point_a_symbolic, order);
 % this expression will be in terms of vars and expansion point_a
+%INDEPENDENT of the hyper-parameters used in traj optimisation or feedback controller synthesis 
+%DEPENDENT only on system dynamics f, and the parameters in the mathematical equations of f.
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
 load('./precomputedData/taylorApproxDynamicsSym.mat');
 
-%taylor-expansion of uniycle dynamics, order = 3 (for debugging)!!
-%lines: 72--80
-
-% %re-assigning variables for ease of usage
-% x1 = x(1); x2 = x(2); x3 = x(3); u1 = u(1); u2 = u(2);
-% a1 = expansion_point_a_symbolic(1); a2 = expansion_point_a_symbolic(2); a3 = expansion_point_a_symbolic(3);
-% a4 = expansion_point_a_symbolic(4); a5 = expansion_point_a_symbolic(5);
-% 
-% taylor_approx = ...
-% [a4*cos(a3) - cos(a3)*(a4 - u1) + a4*sin(a3)*(a3 - x3) - 2*sin(a3)*(a4 - u1)*(a3 - x3) - (a4*cos(a3)*(a3 - x3)^2)/2 - (a4*sin(a3)*(a3 - x3)^3)/6 + (3*cos(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-%  a4*sin(a3) - sin(a3)*(a4 - u1) - a4*cos(a3)*(a3 - x3) + 2*cos(a3)*(a4 - u1)*(a3 - x3) + (a4*cos(a3)*(a3 - x3)^3)/6 - (a4*sin(a3)*(a3 - x3)^2)/2 + (3*sin(a3)*(a4 - u1)*(a3 - x3)^2)/2;
-%                                                                                                                                                                                    u2];
-%
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes
@@ -96,15 +83,18 @@ parfor k = 1:N %length of time samples
     nom_input = u_nom(:, k);
     expansion_point_a_numeric = [nom_state' nom_input'];
 
-    sym_polyDynamics_at_a = get_expansion_at_point(taylor_approx, 'a', expansion_point_a_numeric);
+    sym_polyDynamics_at_a = get_expansion_at_point(taylor_approx, expansion_point_varSymbol, expansion_point_a_numeric);
     sym_polyDynamics_at_a = vpa(sym_polyDynamics_at_a, 4); %cleanup upto 4 decimal places
 
     systemPolyDynamics{k} = sym_polyDynamics_at_a;
 end
 
+%keyboard
+
 %% Compute the deviation dynamics in terms of pvar type deviation: xbar
 
 % Converting expression from syms to pvar (to use SOSTOOLS functionalities)
+
 %pvar x1 x2 x3
 %xbar = [x1 x2 x3]'; %deviations --> nx1 vector
 %xbar: pvar variables referring to state deviations *off* the nominal state 
@@ -143,8 +133,18 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     
     % computing xdot = f value at the nominal state and input values
     nomStateInputVals = [x_nom' u_nom'];
-    fVal_at_nomStateInput = subs(taylor_approx_at_a,[symVars(1) symVars(2) symVars(3) symVars(4) symVars(5)], nomStateInputVals);
-    fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6); %cleanup upto 4 decimal places
+    
+    fVal_at_nomStateInput = taylor_approx_at_a;
+    for i=1:length(nomStateInputVals)
+        fVal_at_nomStateInput = subs(fVal_at_nomStateInput, symVars(i), nomStateInputVals(i));
+    end
+    fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6); %cleanup upto 6 decimal places
+    
+    % Previous implementation of the above lines of code (prolly a bit naive)
+    % fVal_at_nomStateInput = subs(taylor_approx_at_a,[symVars(1) symVars(2) symVars(3) symVars(4) symVars(5) ...
+    %                                 symVars(6) symVars(7) symVars(8) symVars(9) symVars(10) symVars(11) ...
+    %                                 symVars(12) symVars(13) symVars(14) symVars(15) symVars(16)], nomStateInputVals);
+    % fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6) %cleanup upto 6 decimal places
 
     state = x_nom + xBar_pvar; %nominal state + deviation
     input = u_nom - controlGainMatrix*xBar_pvar;
@@ -197,6 +197,7 @@ function taylor_approx = taylor_expansion(f, vars, a, order)
         
         % Add higher-order terms iteratively
         for k = 1:order
+          
             term = 0; % Initialize the term of order k
             
             % Iterate over all multi-index combinations for the current order
@@ -252,9 +253,6 @@ function sym_vector = createSymbolicVector(vecSymbol, n)
     sym_vector = sym_vector'; %column matrix by convention -- nx1
 end
 
-%inputs 
-% varName: string -- name of vector
-% n: int -- length of vector
 function pvar_vector = createPvarVector(vecSymbol, n)
     var_names = arrayfun(@(i) [vecSymbol num2str(i)], 1:n, 'UniformOutput', false);
     var_string = strjoin(var_names, ' ');

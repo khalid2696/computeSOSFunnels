@@ -71,6 +71,7 @@ LyapunovFnValue_profiles = cell(numSamples, 1);
 errors = zeros(numSamples, length(rollout_time_horizon));
 costs = zeros(numSamples, length(rollout_time_horizon));
 
+tic
 for i = 1:numSamples
     x0 = initialStateSamples(:, i);
     %options: Euler, trapezoidal, RK4, (inbuilt) ode45
@@ -91,6 +92,7 @@ for i = 1:numSamples
 
     LyapunovFnValue_profiles{i} = LyapunovFnValsArray;
 end
+toc
 
 disp('-- End of Monte Carlo empirical verification --');
 disp(' ');

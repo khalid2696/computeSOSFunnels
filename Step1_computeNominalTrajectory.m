@@ -1,18 +1,28 @@
 %clc; clearvars; close all
+%yalmip('clear');
+
+disp('Hang on..');
+disp('Computing nominal trajectory using direct collocation trajectory optimisation');
+disp(' ');
 
 %% Add directories
 addpath('./lib/');
 
 %% Inherit parameters if they exist in the wrapper file
 
+% Initial and target states : [pos, vel, theta, omega]
+if exist('initialState','var') || exist('finalState','var')
+    x0 = initialState;
+    xf = finalState;
+else
+    x0 = [0; 0; 0; 0;];   %Initial state: pendulum hanging down, cart at origin
+    xf = [1; 0; pi; 0;];  %Final state: pendulum balanced upright, cart at specific position
+end
+
 if exist('numTimeSteps','var')
     N = numTimeSteps;
 else
     N = 25; % default number of time steps
-end
-
-if ~exist('drawFlag','var')
-    drawFlag = 0; %by default do not plot
 end
 
 % Maximum allowable time horizon
@@ -22,32 +32,15 @@ else
     T_max = 10;  %some default value
 end
 
-%Initial and Final states for constraints: [x; y; theta]
-if exist('xinitial','var') || exist('xfinal','var')
-    x0 = xinitial;
-    xf = xfinal;
-else
-    x0 = [0; 0; pi/2];   % default initial state -- at origin pointing North 
-    xf = [2; 5; pi/2];   % some random final state
+if ~exist('drawFlag','var')
+    drawFlag = 1; %by default do not plot
 end
-%% System dynamics - define states, input and nonlinear function
-% Unicycle dynamics: x_dot = f(x, u)
-dynamicsFnHandle = @(x, u) [u(1) * cos(x(3)); ...  % x_dot
-                            u(1) * sin(x(3)); ...  % y_dot
-                             u(2)];                % theta_dot
 
 %% Nominal trajectory and nominal/open-loop control input (feedforward term)
 
-% Trajectory Optimisation Parameters
-%N = 25;              % Number of time steps
-%T_max = 10;          % Maximum allowable time horizon
-input_saturations = [0.75; pi/2]; %Linear and angular velocity limits (absolute value)
-                             % -input_saturations(j) <= u_j <= input_saturations(j) 
-%input_saturations = [1; pi]; %Linear and angular velocity limits (absolute value)
-                             % -input_saturations(j) <= u_j <= input_saturations(j) 
-
-[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = ...
-getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, input_saturations, T_max, N);
+tic
+[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N);
+toc   
 
 disp('Finshed computing nominal trajectory and nominal (feedforward) input tape');
 disp(' ');
@@ -82,6 +75,8 @@ if drawFlag
     plot(x_nom(1,end), x_nom(2,end), 'or', 'MarkerSize', 3, 'MarkerFaceColor', 'r');
 
     xlabel('p_x'); ylabel('p_y');
+
+    plotStateInputTrajectories(time_instances, x_nom, u_nom)
 end
 
 clearvars; %cleanup the workspace after saving relevant data and plotting
@@ -114,4 +109,29 @@ function plot_pentagon_car(pose)
     fill(pentagon_world(1, :), pentagon_world(2, :), 'w', 'EdgeColor', 'k', 'LineWidth', 1.5);
     hold on;
     axis equal;
+end
+
+function plotStateInputTrajectories(t_opt, x_opt, u_opt)
+    figure;
+        
+    subplot(2,2,1);
+    plot(x_opt(1,:), x_opt(2,:), 'b-', 'LineWidth', 2);
+    xlabel('p_x [m]'); ylabel('p_y [m]');
+    title('Unicycle position'); grid on;
+    
+    subplot(2,2,2);
+    plot(t_opt, rad2deg(x_opt(3,:)), 'b-', 'LineWidth', 2);
+    xlabel('Time (s)'); ylabel(' \theta [deg]');
+    title('Unicycle orientation vs Time'); grid on;
+    
+    subplot(2,2,3);
+    plot(t_opt, u_opt(1,:), 'b-', 'LineWidth', 2);
+    xlabel('Time (s)'); ylabel(' v [m/s]');
+    title('Input Velocity'); grid on;
+    
+    subplot(2,2,4);
+    plot(t_opt, u_opt(2,:), 'b-', 'LineWidth', 2);
+    xlabel('Time (s)'); ylabel(' \omega [rad/s]');
+    title('Input angular velocity'); grid on;
+
 end

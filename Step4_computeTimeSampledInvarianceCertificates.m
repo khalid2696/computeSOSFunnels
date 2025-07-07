@@ -52,33 +52,26 @@ goalScaling = 0.8;  %Keep it less than 1
 
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
-% can include a binary search to determine a good initial guess -- between 0 and 1
+% Exponentially evolving rho_guess
+% rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)), 
+% t_k = tf --> rhoVal = rho_0; t_k = 0 --> rhoVal = (rho_0/e^c); 
 
-if ~exist('rhoGuessChoice','var')
-    rhoGuessChoice = 'const'; %options: 'const' or 'exp' (if const doesn't work out)
-end 
-
-% Option1: constant rho_guess -- rhoGuessChoice = 'const'
-%[TUNEABLE] decrease value if initial guess fails, keep it less than 1!
+%[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
-    rhoInitialGuessConstant = 0.4;
+    rhoInitialGuessConstant = 0.4; %rho_0
 end 
 
-% Option2: Exponentially (quickly) increasing rho_guess -- rhoGuessChoice = 'exp'
-% (only if constant doesn't work)
-% rhoGuess_k = 1 * exp(-c*(t_k - tf)/(t0 - tf)), 
-% t_k = tf --> rhoVal = 1; t_k = 0 --> rhoVal = some small number (1/e^c); 
-
-%[TUNEABLE] increase value if initial guess fails                         
+%[TUNEABLE] c: increase value if initial guess fails
+% Usage note: c < 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+%             c > 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
     rhoInitialGuessExpCoeff = 1.5;
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
 [rhoInitialGuess, candidateV] = getInitialRhoGuessAndCandidateV (time_instances, xbar, deviationDynamics, P, ...
-                                                                    rhoInitialGuessConstant, rhoInitialGuessExpCoeff, ...
-                                                                       rhoGuessChoice); 
-                                                                    %options - 'const' (option1) or 'exp' (option2)
+                                                                    rhoInitialGuessConstant, rhoInitialGuessExpCoeff);
 ellipsoidMatrices = P; %initial guess of ellipsoid matrices are the cost-to-go matrices from TVLQR
 
 %% Define the intial and final regions
@@ -117,7 +110,9 @@ else
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-%keyboard
+if strcmp(usageMode, 'feasibilityCheck')
+    return
+end
 
 %% Alternation Loop -- proceed if we're able to get a feasible initial guess
 
@@ -183,6 +178,9 @@ for iter=1:maxIter
         V_polyFn = sol_candidateVArray{k};
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
+
+        disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+        disp(' ');
     end
 
     if ~infeasibilityStatus
@@ -206,7 +204,7 @@ for iter=1:maxIter
     %assigning values for next iteration
     prevRhoScaling = currRhoScaling;
     currRhoScaling = (1 + rhoStepUpValue)*prevRhoScaling;
-    %currRhoScaling = rhoScaleIncrements.*prevRhoScaling;
+    %currRhoScaling = rhoScaleIncrements.*prevRhoScalintocg;
 
     startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/(1 + rhoStepUpValue); %increasing the inlet volume
     
@@ -246,6 +244,7 @@ save('./precomputedData/setInvarianceCertificates.mat', 'time_instances', 'candi
 
 disp('Saved the time-sampled ellipsoidal matrices parametrizing the invariant sets to a file!');
 disp(' ');
+
 %% ---------------------  Function definitions  ----------------------------
 
 %% SOS Program Functions -- the two alternating steps
@@ -265,7 +264,8 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     %initialise the SOS program
     prog = sosprogram(xbar);
     
-    for k = 2:1:N 
+    for k = 2:1:N
+    %parfor k = 2:N
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -453,7 +453,7 @@ end
 
 %% Helper functions
 
-function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances, xbar, deviationDynamics, costToGoMatrices, rho_0, c, option)
+function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances, xbar, deviationDynamics, costToGoMatrices, rho_0, c)
     
     N = length(time_instances);
     t0 = time_instances(1); tf = time_instances(N);
@@ -466,11 +466,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
     for k = 1:N
         tk = time_instances(k);
         
-        if (strcmpi(option, 'const'))
-            rhoGuess(k) = rho_0;
-        else
-            rhoGuess(k) = rho_0 * exp(-c*(tk - tf)/(t0 - tf));
-        end
+        rhoGuess(k) = rho_0 * exp(-c*(tk - tf)/(t0 - tf));
 
         %getting some initial Lyapunov candidates
         f = deviationDynamics{k};
@@ -483,11 +479,8 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
             error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
-        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
-        
+        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;    
     end
-
-    rhoGuess(end) = 1;
 
 end
 
@@ -517,6 +510,44 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     M = full(M);
 end
 
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
+end
+
 %% Plotting functions
 function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
     figure
@@ -524,7 +555,7 @@ function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
     grid on; 
     axis equal;
     
-    for k=1:1:length(x_nom)
+    for k=1:length(x_nom)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
         M_xy = project_ellipsoid_matrix(M, [1 2]);
         center = x_nom(:,k);
