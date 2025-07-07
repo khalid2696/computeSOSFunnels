@@ -14,7 +14,7 @@ addpath('./lib/');
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
 initialState = [0; 0; pi; 0;];   % initial state: at origin, vertically down
-finalState   = [-3; 0; pi; 0;];   % desired final state
+finalState   = [2; 0; pi; 0;];   % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
 %theta constraints accordingly (based on whether it's upright or hanging down)
@@ -34,7 +34,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 maxTimeHorizon = 10;
 numTimeSteps = 50;         % number of time samples
 
-%drawFlag = 1; % 1: if you want to plot results, 0: otherwise
+drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -45,14 +45,14 @@ x_nom(:,end)'
 
 %% Design a time-varying LQR feedback controller
 
-upsamplingFactor = 20; %finer discretization to prevent integration error build-up
-                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
+%upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
 Q = diag([5, 0.1, 10, 0.1]);
 R = 0.1;
-terminalRegionScaling = 20;
+terminalRegionScaling = 1;
 
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
@@ -96,21 +96,20 @@ run("Step3_getDeviationDynamics.m");
 
 disp('- - - - - - -'); disp(" ");
 
-%% Time-conditioned invariant set analysis (with time-dependance)
+%% Time-conditioned invariant set analysis (with temporal-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clearvars; close all; 
-keyboard;
 
 %specify SOS program hyperparameters
-maxIter = 2; %maximum number of iterations
-rhoGuessChoice = 'const'; %options: 'const' [DEFAULT] and 'exp'
+maxIter = 1; %maximum number of iterations
+rhoGuessChoice = 'exp'; %options: 'const' [DEFAULT] and 'exp'
                           %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
 % Option1: constant rho_guess
-rhoInitialGuessConstant = 0.4; %[TUNEABLE] decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.01; %[TUNEABLE] decrease value if initial guess fails, 
                                %keep value between 0 and 1
 
 % Option2: Exponentially (quickly) increasing rho_guess 
-rhoInitialGuessExpCoeff = 1.5; %[TUNEABLE] increase value if initial guess fails
+rhoInitialGuessExpCoeff = 0.05; %[TUNEABLE] increase value if initial guess fails
                                %keep value greater than 0 (increasing fn)
 
 run("Step4_computeTimeSampledInvarianceCertificates.m");
@@ -119,15 +118,15 @@ disp('- - - - - - -'); disp(" ");
 %% [Optional] Plot computed funnels
 close all
 
-projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
+projectionDims_2D = [1 3]; projectionDims_3D = [1 2 4];
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
 
-%startTimeIndex = 1;
-%numSamples = 100;
+startTimeIndex = 1;
+numSamples = 100;
 
-%run("./utils/empiricallyVerifyInvariance.m");
+run("./utils/empiricallyVerifyInvariance.m");
 
 %% Small debug snippets
 
@@ -172,14 +171,15 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     c_theta = cos(theta);
     
     % Common denominator
-    denom = M + m - m * c_theta^2;
+    %denom = M + m*(1 - c_theta^2);
+    denom = M + m*s_theta^2;
     
     % State derivatives
     f = [
         v_x;
-        (F + m * L * theta_dot^2 * s_theta - m * g * s_theta * c_theta) / denom;
+        (F + m*L*theta_dot^2*s_theta - m*g*s_theta*c_theta) / denom;
         theta_dot;
-        (-F * c_theta - m * L * theta_dot^2 * s_theta * c_theta + (M + m) * g * s_theta) / (L * denom)
+        (-F*c_theta - m*L*theta_dot^2*s_theta*c_theta + (M + m)*g*s_theta) / (L * denom)
     ];
 end
 

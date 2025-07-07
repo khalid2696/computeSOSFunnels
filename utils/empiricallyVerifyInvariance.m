@@ -28,10 +28,6 @@ load('../precomputedData/setInvarianceCertificates.mat')
 N = length(time_instances);
 n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 
-%% Parameters
-%startTimeIndex = randi(N-1); %should be in between 1 and N-1
-%numSamples = 1000;
-
 %% Specify parameters or Inherit them if they exist in the wrapper file
 
 %Specify the start time for the rollouts
@@ -42,6 +38,10 @@ end
 if ~exist('numSamples','var')
     numSamples = 500; %default number of rollouts
 end
+
+if ~exist('projectionDims_2D','var')
+    projectionDims_2D = [1 3];
+end 
 
 %% Monte Carlo rollouts for empirical verification
 
@@ -100,12 +100,7 @@ disp('Plotting trajectories and metrics from MC rollouts..');
 disp(' ');
 
 %Plot the rollout trajectories
-plot_trajectories(trajectories, rollout_x_nom, inletSet, x_nom);
-
-%Plot the terminal set
-terminalState = rollout_x_nom(:,end); %centered around the nominal trajectory
-terminalSet = rollout_ROA(:,:,end)/rollout_levelSetVals(end);
-plotTerminalSet(terminalState, terminalSet);
+plot_trajectories(trajectories, rollout_x_nom, inletSet, x_nom, projectionDims_2D);
 
 %Plot the input profiles
 %plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances)
@@ -113,7 +108,7 @@ plotTerminalSet(terminalState, terminalSet);
 %Visualise metrics
 plotMetrics(LyapunovFnValue_profiles, errors, costs, rollout_time_horizon);
 
-%clearvars;
+clearvars;
 
 %% Function defintions
 
@@ -196,31 +191,28 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
 end
 
 
-function plot_trajectories(trajectories, rollout_x_nom, inletSet, complete_x_nom)
-    % Plot all trajectories and nominal trajectory
-    figure;
-    hold on;
-    grid on; 
-    axis equal;
+function plot_trajectories(trajectories, rollout_x_nom, complete_x_nom, projectionDims)
     
-    plot(rollout_x_nom(1, :), rollout_x_nom(2, :), 'k--', 'LineWidth', 2);
+    if nargin < 4
+        projectionDims = [1 2]; %if not specified, by default x-y projection
+    end
+
+    % Plot all trajectories and nominal trajectory
+    %figure; hold on; grid on; axis equal;
+    
+    plot(rollout_x_nom(projectionDims(1), :), rollout_x_nom(projectionDims(2), :), 'k--', 'LineWidth', 2);
 
     for i = 1:length(trajectories)
-        plot(trajectories{i}(1, :), trajectories{i}(2, :), 'b-', 'LineWidth', 0.5);
-        plot(trajectories{i}(1, 1), trajectories{i}(2, 1), 'sg');
+        plot(trajectories{i}(projectionDims(1), :), trajectories{i}(projectionDims(2), :), 'b-', 'LineWidth', 0.5);
+        plot(trajectories{i}(projectionDims(1), 1), trajectories{i}(projectionDims(2), 1), 'sg');
     end
     
-    plot(complete_x_nom(1, :), complete_x_nom(2, :), 'k--', 'LineWidth', 2);
-    %plot_pentagon_car(x_nom(:,end)); %final pose
-    
-    %plot an ellipse from which initial states are sampled
-    inletSet_xy = project_ellipsoid_matrix(inletSet, [1 2]); %project onto x-y space
-    plotEllipse(rollout_x_nom(:, 1), inletSet_xy)
+    plot(complete_x_nom(projectionDims(1), :), complete_x_nom(projectionDims(2), :), 'k--', 'LineWidth', 2);
 
-    xlabel('p_x'); ylabel('p_y');
+    xlabel(['x_{', num2str(projectionDims(1)), '}']);
+    ylabel(['x_{', num2str(projectionDims(2)), '}']);
     title('Monte Carlo Rollout Trajectories');
-    legend('Nominal Trajectory','Trajectory rollouts','Sample Initial states','Location','best');
-    %hold off;
+    %legend('Nominal Trajectory','Trajectory rollouts','Sample Initial states','Location','best');
 end
 
 function plot_input_profiles(input_profiles, rollout_time_instances, complete_u_nom, complete_time_instances)
@@ -323,7 +315,7 @@ function plotTerminalSet(x_final, terminalEllipsoid)
     
     plot(x_final(1) + rotated_ellipse(1, :), ...
          x_final(2) + rotated_ellipse(2, :), ...
-         '-.g', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
+         '-.r', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
 function M_2D = project_ellipsoid_matrix(M, projection_dims)

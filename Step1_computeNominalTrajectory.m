@@ -40,6 +40,8 @@ end
 
 tic
 [x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N);
+%[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation_Smooth(dynamicsFnHandle, x0, xf, T_max, N);
+%[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation_EnergyPumping(dynamicsFnHandle, x0, xf, T_max, N);
 toc   
 
 disp('Finshed computing nominal trajectory and nominal (feedforward) input tape');
