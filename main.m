@@ -129,18 +129,26 @@ clearvars; close all;
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
-rhoGuessChoice = 'exp'; %options: 'const' [DEFAULT] and 'exp'
-                          %[USE 'exp' ONLY IF 'const' IS INFEASIBLE]
-% Option1: constant rho_guess
-rhoInitialGuessConstant = 0.01; %[TUNEABLE] decrease value if initial guess fails, 
-                               %keep value between 0 and 1
 
-% Option2: Exponentially (quickly) increasing rho_guess 
-rhoInitialGuessExpCoeff = 1; %[TUNEABLE] increase value if initial guess fails
-                               %keep value greater than 0 (increasing fn)
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)) 
+% Usage note: c < 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+%             c > 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+                                % keep it greater than 0!
+rhoInitialGuessExpCoeff = 1; %[TUNEABLE] c: increase value if initial guess fails
 
+usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
+try                               
+    run("Step4_computeTimeSampledInvarianceCertificates.m");
+catch
+    disp('Could not find a successful initial guess to start the alternation scheme!');
+end
+
+%optimize once the feasibility check passes through
+close all
+usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
-disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
 close all
