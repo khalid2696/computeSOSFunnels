@@ -58,15 +58,15 @@ goalScaling = 0.8;  %Keep it less than 1
 
 %[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
-    rhoInitialGuessConstant = 0.4; %rho_0
+    rhoInitialGuessConstant = 0.05; %rho_0
 end 
 
-%[TUNEABLE] c: increase value if initial guess fails
-% Usage note: c < 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%[TUNEABLE] c: decrease value if initial guess fails
+% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
-%             c > 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 1.5;
+    rhoInitialGuessExpCoeff = 0.5;
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -110,7 +110,7 @@ else
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-if strcmp(usageMode, 'feasibilityCheck')
+if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
     return
 end
 
@@ -466,7 +466,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
     for k = 1:N
         tk = time_instances(k);
         
-        rhoGuess(k) = rho_0 * exp(-c*(tk - tf)/(t0 - tf));
+        rhoGuess(k) = rho_0 * exp(c*(tk - tf)/(t0 - tf));
 
         %getting some initial Lyapunov candidates
         f = deviationDynamics{k};
