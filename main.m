@@ -103,13 +103,13 @@ clearvars; close all;
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
 
-% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)) 
-% Usage note: c < 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
-%             c > 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = 0.05; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = -0.05; %[TUNEABLE] c: increase value if initial guess fails
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               

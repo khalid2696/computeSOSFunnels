@@ -60,12 +60,12 @@ if ~exist('rhoInitialGuessConstant','var')
     rhoInitialGuessConstant = 0.1; %rho_0
 end 
 
-%[TUNEABLE] c: increase value if initial guess fails
-% Usage note: c < 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%[TUNEABLE] c: decrease value if initial guess fails
+% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
-%             c > 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 2.5;
+    rhoInitialGuessExpCoeff = -2.5;
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -463,7 +463,7 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
     for k = 1:N
         tk = time_instances(k);
         
-        rhoGuess(k) = rho_0 * exp(-c*(tk - tf)/(t0 - tf));
+        rhoGuess(k) = rho_0 * exp(c*(tk - tf)/(t0 - tf));
 
         %getting some initial Lyapunov candidates
         f = deviationDynamics{k};
