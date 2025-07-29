@@ -1,5 +1,4 @@
 %clc; clearvars; close all
-
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
@@ -7,6 +6,12 @@ warning('off','MATLAB:singularMatrix');
 load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 load('./precomputedData/deviationDynamics.mat');
+
+if ~exist('drawFlag','var')
+    drawFlag = 1; %by default, plot the results
+end
+
+usageMode = 'shapeOptimisation';
 
 %% Status message
 %Quantities at our disposal now
@@ -41,7 +46,8 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
+
+rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
                        %Default Value: 0.001
 
@@ -52,9 +58,8 @@ goalScaling = 0.8;  %Keep it less than 1
 
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
-% Exponentially evolving rho_guess
-% rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)), 
-% t_k = tf --> rhoVal = rho_0; t_k = 0 --> rhoVal = (rho_0/e^c); 
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% t_k = tf --> rhoVal = rho_0; t_k = t0 --> rhoVal = (rho_0*e^c); 
 
 %[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
@@ -66,7 +71,7 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 0.5;
+    rhoInitialGuessExpCoeff = 2; %c
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -84,31 +89,40 @@ startRegionEllipsoidMatrix = (1/startScaling)*P(:,:,1)/rhoInitialGuess(1);
 
 %% Plot guess funnel and start/end regions
 
-%plot(time_instances, rhoInitialGuess);
-%plotFunnel(x_nom, ellipsoidMatrices, ones(size(rhoInitialGuess)));
+% if drawFlag
+%     plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+%     title('Initial guess funnel');
+%     plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+%     plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+% end
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-title('Initial guess funnel');
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+if drawFlag
+    plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+
+    if ~infeasibilityStatus
+        title('Initial guess V and rho scaling (feasible)');
+    else
+        title('Initial guess V and rho scaling (infeasible)');
+    end
+end
 disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
-    title('Initial guess V and rho scaling (feasible)');
     disp('Feasibility check passed for given rho guess..');
 else
-    title('Initial guess V and rho scaling (infeasible)');
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
+
+initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
+initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
 
 if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
     return
@@ -130,19 +144,11 @@ for iter=1:maxIter
                                                                               multiplierPolyDeg, options, tolerance);
  
     if ~infeasibilityStatus
-        disp('Feasibility-check step: passed'); disp(' ');
-        
-        %plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        %title('A valid funnel certificate');
+        disp('Feasibility-check step: passed'); disp(' ');    
     end
 
     if infeasibilityStatus
         if iter == 1
-            %plotFunnel(x_nom, P, currRhoScaling);
-            %plotFinalSet(x_nom(:,1), P(:,:,1)/rho_Start);
-            %title('Scaling of cost-go-matrices (unsuccessful)')
             error('Could not find a successful initial guess to start the alternation scheme!')
         else
             disp('Infeasibility! Exiting the alternation scheme..')
@@ -186,10 +192,12 @@ for iter=1:maxIter
     if ~infeasibilityStatus
         disp('Optimisation step: passed'); disp(' ');
         
-        plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        
+        if drawFlag
+            plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
+            plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+            plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+        end
+
         title('Optimised funnel certificate');
         
         % display some volumetric properties
@@ -229,12 +237,10 @@ disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellip
 
 %% Status message
 
-clc
-
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
 disp(' ');
 
-%% Save the multipliers, caniddate V and level-set boundary value to a file
+%% Save the multipliers, candidate V and level-set boundary value to a file
 
 rhoScaling = prevRhoScaling;
 multiplierTerms = feasibleMultiplierTerms;
