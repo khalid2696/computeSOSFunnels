@@ -13,89 +13,97 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [2; 4; 2; 0; 0; 0];   % desired final pose
+finalPose   = [1; 2; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
-quadParameters.m = 0.5;        % mass (kg)
+quadParameters.m = 1;        % mass (kg)
 quadParameters.g = 9.81;       % gravity (m/s^2)
-quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
+quadParameters.J = [5e-3, 5e-3, 10e-3]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 5;
+maxTimeHorizon = 10;
 numTimeSteps = 25;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
+keyboard
 %% Design a time-varying LQR feedback controller
-
-upsamplingFactor = 10; %finer discretization to prevent integration error build-up
+clearvars
+%upsamplingFactor = 10; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
-Q = 0.1*diag([
-    50,  50,  50, ...   % Position weights [px, py, pz] - high for tracking
-    5,   5,   5,  ...   % Velocity weights [vx, vy, vz] - moderate
-    10,   10,   10,  ...   % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
-    1,    1,    1  ]);     % Angular rate weights [p, q, r] - low, let inner loop handle
+% Q = 0.01*diag([
+%     50,  50,  80, ...   % Position weights [px, py, pz]
+%     5,   5,   8,  ...   % Velocity weights [vx, vy, vz]
+%     20,  20,  10,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+%     100, 100,  100  ]);   % Angular rate weights [p, q, r]
 
-% Q_aggressive = diag([200, 200, 200, 20, 20, 20, 80, 80, 10, 2, 2, 2]);
-% R_conservative = diag([0.05, 20, 20, 30]);
+Q = 0.01*diag([
+    1,  1,  4, ...   % Position weights [px, py, pz]
+    1,  1,  1,  ...   % Velocity weights [vx, vy, vz]
+    20,  20,  10,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+    4, 4,  4  ]);   % Angular rate weights [p, q, r]
+
+%Q = 10*eye(12);
 
 % Control order: [T; Mx; My; Mz]
-R = diag([
-    1, ...    % Thrust - relatively low, thrust is "cheap"
-    30,  ...    % Roll moment Mx - higher, moments are more "expensive"
-    30,  ...    % Pitch moment My
-    50  ]);     % Yaw moment Mz - highest, yaw control typically less aggressive
+% R = 1000*diag([
+%     0.5, ...    % Thrust
+%     0.05,  ...   % Roll moment Mx
+%     0.05,  ...   % Pitch moment My
+%     0.05  ]);   % Yaw moment Mz
+
+R = 50*diag([
+    1/150, ...    % Thrust
+    1,  ...   % Roll moment Mx
+    1,  ...   % Pitch moment My
+    1  ]);   % Yaw moment Mz
+
+%R = eye(4);
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 1; % Terminal constraint cost
+terminalRegionScaling = 10; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
 
-% Tuning guidelines:
-% For better position tracking:
-% 
-% Increase position weights (px, py, pz): 100 to 200
-% Increase velocity weights if oscillations occur: 10 to 20
-% 
-% For smoother control:
-% 
-% Increase R values (especially moments): Mx, My from 10 to 50
-% Decrease attitude weights if too aggressive: 50 to 20
-% 
-% Physical reasoning:
-% 
-% Position weights (100): High because position tracking is primary objective
-% Attitude weights (50, 50, 20): Roll/pitch couple to xy-position, so weighted higher than yaw
-% Thrust weight (0.1): Low because thrust changes are energetically cheap
-% Moment weights (10, 10, 20): Higher because moments require more energy and we want smooth attitude control
-
-%for the above cost matrices, discrete time recursion seems to work better
-%than continous time DRE (in-built solvers). This might change with
-%different choice of (less aggressive) matrices!
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
-keyboard;
+%condition number (kappa) < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+for k=1:1:size(P,3)
+    matrix_condition_number(P(:,:,k))
+end
+
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
 close all;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
+startMaxPerturbation = 1e-3; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 run("./utils/checkClosedLoop_MCRollouts.m");
+
+% for k = 1:25
+% 
+%     startTimeIndex = k
+%     startMaxPerturbation = 0.005;
+% 
+%     clearvars -except startMaxPerturbation startTimeIndex
+% 
+%     run("./utils/checkClosedLoop_MCRollouts.m");
+%     drawnow
+% end
 
 %% [Optional] Load all the saved files for further analysis
 
@@ -113,6 +121,15 @@ plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
 projectionDims_3D = [1 2 3];
 plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
 
+projectionDims_3D = [4 5 6];
+plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+
+projectionDims_3D = [7 8 9];
+plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+
+projectionDims_3D = [10 11 12];
+plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+
 keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
@@ -125,7 +142,7 @@ disp('- - - - - - -'); disp(" ");
 
 %% Time-conditioned invariant set analysis (with temporal-dependance)
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
-clearvars; close all; 
+clc; clearvars; close all; 
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
@@ -134,9 +151,9 @@ maxIter = 1; %maximum number of iterations
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = -1; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = -10; %[TUNEABLE] c: decrease value if initial guess fails
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
@@ -144,6 +161,8 @@ try
 catch
     disp('Could not find a successful initial guess to start the alternation scheme!');
 end
+
+return
 
 %optimize once the feasibility check passes through
 close all
@@ -206,8 +225,8 @@ function f = quadrotor_dynamics(x, u, quadParameters)
     c_phi = cos(phi); s_phi = sin(phi);
     c_theta = cos(theta); s_theta = sin(theta);
     c_psi = cos(psi); s_psi = sin(psi);
-    t_theta = tan(theta);
-    sec_theta = sec(theta);
+    t_theta = s_theta/c_theta;
+    sec_theta = 1/c_theta;
     
     % Quadrotor dynamics 
     % Assumptions: no aerodynamic drag and gyroscopic coupling due to rotor inertia)
@@ -232,6 +251,44 @@ function f = quadrotor_dynamics(x, u, quadParameters)
         (Mq + (Jzz - Jxx) * p * r) / Jyy;
         (Mr + (Jxx - Jyy) * p * q) / Jzz
     ];
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
 end
 
 function plotOneLevelSet_2D(x_nom, ellipsoidMatrix, projectionDims)

@@ -65,6 +65,7 @@ end
 %% Define terminal cost matrix if not specified using TI-LQR
 if ~exist('P_f','var')
     [~, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom(:,end), u_nom(:,end), Q, R);
+    
     P_f = S_f*terminalRegionScaling;
     %P_f = Q*terminalRegionScaling;
 end
@@ -74,28 +75,28 @@ end
 Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
 [K_cont, P_cont] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, P_f, Ts, 'continuous');
 
-%% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
-
-% Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
-
-Nd = N*upsamplingFactor; % number of interpolated points
-
-% Fine time vector for interpolation: upsampled spacing
-t_fine = linspace(time_instances(1), time_instances(end), Nd);
-
-[x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
-
-% Compute time-sampled TVLQR Gains on a finer discretization
-
-Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
-[K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'discrete');
-
-% Downsample the trajectories, inputs, cost and gain matrices to match the original time samples
-
-[x_nom, u_nom] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, time_instances);
-
-K_disc = downsample_matrix(K_fine, t_fine, time_instances);
-P_disc = downsample_matrix(P_fine, t_fine, time_instances);
+% %% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
+% 
+% % Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
+% 
+% Nd = N*upsamplingFactor; % number of interpolated points
+% 
+% % Fine time vector for interpolation: upsampled spacing
+% t_fine = linspace(time_instances(1), time_instances(end), Nd);
+% 
+% [x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
+% 
+% % Compute time-sampled TVLQR Gains on a finer discretization
+% 
+% Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
+% [K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'discrete');
+% 
+% % Downsample the trajectories, inputs, cost and gain matrices to match the original time samples
+% 
+% [x_nom, u_nom] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, time_instances);
+% 
+% K_disc = downsample_matrix(K_fine, t_fine, time_instances);
+% P_disc = downsample_matrix(P_fine, t_fine, time_instances);
  
 %% Compare the two methods
 % 
@@ -109,15 +110,15 @@ P_disc = downsample_matrix(P_fine, t_fine, time_instances);
 
 %% Choose the matrices computed from one of the two methods
 
-K = K_disc;
-P = P_disc;
+K = K_cont;
+P = P_cont;
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
 f_sym = f;
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'x_nom', 'u_nom', 'K', 'P', 'f_sym');
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P', 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');

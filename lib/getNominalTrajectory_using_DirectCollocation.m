@@ -1,21 +1,24 @@
 function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
 getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, N, quadParameters)
 
-    %% Optimisation parameters - cost function and state/input constraints
-    timeHorizon_weight = 2;
-    controlEffort_weight = 0.1;
-    
-    %state constraints
-    rollSaturation = [-pi/3 pi/3]; %small roll and pitch angles
-    pitchSaturation = [-pi/3 pi/3];
-    yawSaturation = [-pi/6 pi/6]; %heading angle
-
-    %input saturations
-    thrustSaturation = [0 15];
-    momentSaturation = [-2.5 2.5];
-    
     %% extracting quadrotor model parameters
     m = quadParameters.m; g = quadParameters.g;
+
+    %% Optimisation parameters - cost function and state/input constraints
+    timeHorizon_weight = 1;
+    controlEffort_weight = 0.25;
+    controlSmoothnessWeight = 0.5;     % NEW: Penalize control derivatives
+    velocitySmoothnessWeight = 0.2;    % NEW: Penalize state derivatives
+    
+    %state constraints
+    rollSaturation = [-pi/4 pi/4]; %small roll and pitch angles
+    pitchSaturation = [-pi/4 pi/4];
+    yawSaturation = [-pi/2 pi/2]; %heading angle
+
+    %input saturations
+    Weight = m*g;
+    thrustSaturation = [0 2*Weight]; %considering a T/W ratio
+    momentSaturation = [-1 1];
     
     %% Define Decision variables 
     T = sdpvar(1); %for time horizon
@@ -27,15 +30,63 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     
     %% Constraints and Objective
     constraints = [0.1 <= T, T <= T_max]; % Time horizon bounds
-    cost = timeHorizon_weight * T; % Penalize total time taken
     
-    % Objective cost
+    
+    % % Cost Objective
+    % 
+    % cost = timeHorizon_weight * T; % Penalize total time taken
+    % 
+    % for k = 1:N-1
+    %     % Cost function: time + tracking error + control effort
+    %     %cost = cost + norm(X(1:3, k) - pf, 2)^2 + 0.1 * norm(U(:, k), 2)^2;
+    % 
+    %     %cost function: time + control effort
+    %     cost = cost + controlEffort_weight * norm(U(:, k), 2)^2;
+    % end
+
+%% Cost Objective with smoothness regularization
+    cost = timeHorizon_weight * T; % Base time penalty
+    
     for k = 1:N-1
-        % Cost function: time + tracking error + control effort
-        %cost = cost + norm(X(1:3, k) - pf, 2)^2 + 0.1 * norm(U(:, k), 2)^2;
+        % Basic control effort penalty
+        cost = cost + controlEffort_weight * (U(1,k)^2 + U(2,k)^2 + U(3,k)^2 + U(4,k)^2);
         
-        %cost function: time + control effort
-        cost = cost + controlEffort_weight * norm(U(:, k), 2)^2;
+        % NEW: Control smoothness penalty - penalize rapid changes in inputs
+        if k > 1
+            thrust_change = U(1,k) - U(1,k-1);
+            cost = cost + controlSmoothnessWeight * thrust_change^2;
+            
+            % Penalize changes in moments
+            for i = 2:4
+                moment_change = U(i,k) - U(i,k-1);
+                cost = cost + controlSmoothnessWeight * moment_change^2;
+            end
+        end
+        
+        % NEW: State smoothness penalty - penalize rapid changes in velocities and angular rates
+        if k > 1
+            for i = 4:6  % linear velocity components
+                vel_change = X(i,k) - X(i,k-1);
+                cost = cost + velocitySmoothnessWeight * vel_change^2;
+            end
+
+            for i = 10:12  % angular velocity components
+                vel_change = X(i,k) - X(i,k-1);
+                cost = cost + velocitySmoothnessWeight * vel_change^2;
+            end
+        end
+
+        % % Soft input saturation penalties (gentler than hard constraints)
+        % input_penalty_weight = 0.01;
+        % for i = 1:4
+        %     % Exponential penalty when approaching limits
+        %     if i == 1 % Thrust
+        %         cost = cost + input_penalty_weight * exp(max(0, U(i,k) - 1.8*Weight));
+        %         cost = cost + input_penalty_weight * exp(max(0, 0.2*Weight - U(i,k)));
+        %     else % Moments
+        %         cost = cost + input_penalty_weight * (exp(max(0, U(i,k) - 0.8)) + exp(max(0, -0.8 - U(i,k))));
+        %     end
+        % end
     end
     
     % Dynamics constraints (collocation)
@@ -72,10 +123,16 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     % thrust coefficient (k), counter-moment coefficient (d) and arm length (l)
     constraints = [constraints, thrustSaturation(1) <= U(1,:), U(1,:) <= thrustSaturation(2)]; % Thrust
     constraints = [constraints, momentSaturation(1) <= U(2:4,:), U(2:4,:) <= momentSaturation(2)]; % Torques
-    constraints = [constraints, U(1,end) == m*g]; %hover at terminal state
+    constraints = [constraints, U(1,end) == Weight]; %hover at terminal state
     
     %% Solve using IPOPT
-    options = sdpsettings('solver', 'ipopt', 'verbose', 2);
+    %options = sdpsettings('solver', 'ipopt', 'verbose', 2);
+    options = sdpsettings('solver', 'ipopt', 'verbose', 1);
+    options.ipopt.max_iter = 3000; % Set the desired tolerance
+    options.ipopt.tol = 1e-6; % Set the desired tolerance
+    options.ipopt.acceptable_tol = 1e-4; % Set the acceptable tolerance 
+    options.ipopt.acceptable_iter = 100; % Number of iterations for acceptable termination
+    
     diagnostics = optimize(constraints, cost, options);
     
     %% Extract solutions

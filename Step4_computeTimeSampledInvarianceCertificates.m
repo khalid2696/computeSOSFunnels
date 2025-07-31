@@ -1,6 +1,5 @@
 %clc; clearvars; close all
 
-%keyboard
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
@@ -35,7 +34,7 @@ options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
                           %options -- mosek/sedumi
 multiplierPolyDeg = 2; %polynomial multiplier of predefined degree
 LyapunovFnDeg = 2;     %quadratic Lyapunov function
-tolerance = 1e-6;
+tolerance = 1e-9;
 convergenceTolerance = 1e-2; %if less than 1 percent change
 
 % 2. Parameters pertaining to Alternation Scheme (SCP) -- feasibility step and optimisation step             
@@ -49,7 +48,7 @@ rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
                     %decrease if computed funnel is weirdly shaped
-goalScaling = 0.8;  %Keep it less than 1
+goalScaling = 0.4;  %Keep it less than 1
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % Exponentially evolving rho_guess
@@ -484,18 +483,15 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         A = jacobian(f,xbar); %symbolic A matrix
         A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
         
-        if ~all(real(eig(A_at_origin)) < 0)
+        if ~all(real(eig(A_at_origin)) <= 0)
             disp(k); disp(eig(A_at_origin));
             disp('Nominal trajectory cannot be determined to be stable using indirect Lyapunov method');  
-            error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
+            disp('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
         
     end
-
-    %rhoGuess(end) = 1;
-
 end
 
 

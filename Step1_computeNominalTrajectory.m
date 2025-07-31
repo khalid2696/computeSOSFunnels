@@ -18,8 +18,7 @@ addpath('./lib/');
 % if ~exist('quadParameters','var')
 %     quadParameters.m = 0.5;        % mass (kg)
 %     quadParameters.g = 9.81;       % gravity (m/s^2)
-%     quadParameters.J = [0.01, 0.01, 0.018]; % moment of inertia (kg⋅m^2) 
-%                        %[4.856e-3, 4.856e-3, 8.801e-3]
+%     quadParameters.J = [5e-3, 5e-3, 10e-3]; % moment of inertia (kg⋅m^2)                    
 % end
 
 % Initial & target pose: position and Euler angles (roll, pitch, yaw) in radians

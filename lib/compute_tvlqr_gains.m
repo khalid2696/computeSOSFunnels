@@ -82,6 +82,9 @@ function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Pf, dt, metho
         % Flip to go forward in time: [t0 to tf]
         P = flip(P, 3);    % P is nxnxN
         K = flip(K, 3);    % K is mxnxN
+
+        [Kf, ~] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom(:,end), u_nom(:,end), Q, R);
+        K(:,:,N) = Kf;
     end
 end
 

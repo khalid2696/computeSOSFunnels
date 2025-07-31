@@ -95,8 +95,8 @@ disp(' ');
 plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
 plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
 
-plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
-plot_error_metrics(errors, costs, rollout_time_horizon);
+%plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
+%plot_error_metrics(errors, costs, rollout_time_horizon);
 
 clearvars;
 
