@@ -35,7 +35,7 @@ disp('- - - - - - -'); disp(" ");
 %keyboard
 %% Design a time-varying LQR feedback controller
 clearvars
-upsamplingFactor = 1; %finer discretization to prevent integration error build-up
+%upsamplingFactor = 1; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices40
@@ -84,70 +84,6 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 for k=1:1:size(P,3)
     matrix_condition_number(P(:,:,k))
 end
-
-%% temp code for debugging purposes
-% close all
-% clearvars -except t_fine u_fine x_fine
-% load('./precomputedData/nominalTrajectory.mat');
-% 
-% for i = 1:12
-%     figure;
-%     plot(t_fine, x_fine(i,:), '--b', 'LineWidth', 1.5);
-%     hold on
-%     plot(time_instances, x_nom(i,:), '-k', 'LineWidth', 1.2);
-%     grid on
-%     xlabel('time [s]');
-%     ylabel(['x_{', num2str(i), '}'])
-% end
-% 
-% for i = 1:4
-%     figure;
-%     plot(t_fine, u_fine(i,:), '--b', 'LineWidth', 1.5);
-%     hold on
-%     plot(time_instances, u_nom(i,:), '-k', 'LineWidth', 1.2);
-%     grid on
-%     xlabel('time [s]');
-%     ylabel(['u_{', num2str(i), '}'])
-% end
-
-% % for debugging
-% load('./precomputedData/LQRGainsAndCostMatrices.mat');
-% 
-% t_fine = time_instances;
-% u_fine = u_nom;
-% x_fine = x_nom;
-% 
-% K_fine = K;
-% P_fine = P;
-% 
-% clearvars -except t_fine u_fine x_fine K_fine P_fine
-% 
-% load('./precomputedData/nominalTrajectory.mat');
-% [x_coarse, u_coarse] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, time_instances);
-% 
-% K_coarse = downsample_matrix(K_fine, t_fine, time_instances);
-% P_coarse = downsample_matrix(P_fine, t_fine, time_instances);
-% 
-% close all;
-% for i = 1:12
-%     figure;
-%     plot(time_instances, x_nom(i,:), '--b', 'LineWidth', 1.5);
-%     hold on
-%     plot(time_instances, x_coarse(i,:), '-k', 'LineWidth', 1.2);
-%     grid on
-%     xlabel('time [s]');
-%     ylabel(['x_{', num2str(i), '}'])
-% end
-% 
-% for i = 1:4
-%     figure;
-%     plot(time_instances, u_nom(i,:), '--b', 'LineWidth', 1.5);
-%     hold on
-%     plot(time_instances, u_coarse(i,:), '-k', 'LineWidth', 1.2);
-%     grid on
-%     xlabel('time [s]');
-%     ylabel(['u_{', num2str(i), '}'])
-% end
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 

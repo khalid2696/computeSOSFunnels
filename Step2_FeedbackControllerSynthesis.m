@@ -77,16 +77,16 @@ Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
 
 %% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
 
-% Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
-Nd = N*upsamplingFactor; % number of interpolated points
-
-% Fine time vector for interpolation: upsampled spacing
-t_fine = linspace(time_instances(1), time_instances(end), Nd);
-
-[x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
-
-Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
-[K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'continuous');
+% % Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
+% Nd = N*upsamplingFactor; % number of interpolated points
+% 
+% % Fine time vector for interpolation: upsampled spacing
+% t_fine = linspace(time_instances(1), time_instances(end), Nd);
+% 
+% [x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
+% 
+% Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
+% [K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'continuous');
 
 % % Compute time-sampled TVLQR Gains on a finer discretization
 % 
@@ -112,19 +112,15 @@ Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1);
 
 %% Choose the matrices computed from one of the two methods
 
-time_instances = t_fine;
-x_nom = x_fine;
-u_nom = u_fine;
-
-K = K_fine;
-P = P_fine;
+K = K_cont;
+P = P_cont;
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
 f_sym = f;
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'x_nom', 'u_nom', 'K', 'P', 'f_sym');
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P', 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
