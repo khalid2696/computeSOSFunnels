@@ -13,12 +13,12 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [1; 2; 2; 0; 0; 0];   % desired final pose
+finalPose   = [4; 2; 2; 0; 0; 0];  % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
-quadParameters.m = 1;        % mass (kg)
+quadParameters.m = 0.7;        % mass (kg)
 quadParameters.g = 9.81;       % gravity (m/s^2)
-quadParameters.J = [5e-3, 5e-3, 10e-3]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
+quadParameters.J = [2e-3, 2e-3, 3.5e-3]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
@@ -32,13 +32,13 @@ drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
-keyboard
+%keyboard
 %% Design a time-varying LQR feedback controller
 clearvars
-%upsamplingFactor = 10; %finer discretization to prevent integration error build-up
+upsamplingFactor = 1; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
-%Cost matrices
+%Cost matrices40
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
 % Q = 0.01*diag([
 %     50,  50,  80, ...   % Position weights [px, py, pz]
@@ -46,10 +46,10 @@ clearvars
 %     20,  20,  10,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
 %     100, 100,  100  ]);   % Angular rate weights [p, q, r]
 
-Q = 0.01*diag([
-    1,  1,  4, ...   % Position weights [px, py, pz]
-    1,  1,  1,  ...   % Velocity weights [vx, vy, vz]
-    20,  20,  10,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+Q = 0.1*diag([
+    100,  100,  400, ...   % Position weights [px, py, pz]
+    4,  4,  25,  ...   % Velocity weights [vx, vy, vz]
+    400,  400,  100,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
     4, 4,  4  ]);   % Angular rate weights [p, q, r]
 
 %Q = 10*eye(12);
@@ -61,8 +61,8 @@ Q = 0.01*diag([
 %     0.05,  ...   % Pitch moment My
 %     0.05  ]);   % Yaw moment Mz
 
-R = 50*diag([
-    1/150, ...    % Thrust
+R = 10*diag([
+    0.16, ...    % Thrust
     1,  ...   % Roll moment Mx
     1,  ...   % Pitch moment My
     1  ]);   % Yaw moment Mz
@@ -78,7 +78,6 @@ terminalRegionScaling = 10; % Terminal constraint cost
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
-% for debugging
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 %condition number (kappa) < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
@@ -86,12 +85,80 @@ for k=1:1:size(P,3)
     matrix_condition_number(P(:,:,k))
 end
 
+%% temp code for debugging purposes
+% close all
+% clearvars -except t_fine u_fine x_fine
+% load('./precomputedData/nominalTrajectory.mat');
+% 
+% for i = 1:12
+%     figure;
+%     plot(t_fine, x_fine(i,:), '--b', 'LineWidth', 1.5);
+%     hold on
+%     plot(time_instances, x_nom(i,:), '-k', 'LineWidth', 1.2);
+%     grid on
+%     xlabel('time [s]');
+%     ylabel(['x_{', num2str(i), '}'])
+% end
+% 
+% for i = 1:4
+%     figure;
+%     plot(t_fine, u_fine(i,:), '--b', 'LineWidth', 1.5);
+%     hold on
+%     plot(time_instances, u_nom(i,:), '-k', 'LineWidth', 1.2);
+%     grid on
+%     xlabel('time [s]');
+%     ylabel(['u_{', num2str(i), '}'])
+% end
+
+% % for debugging
+% load('./precomputedData/LQRGainsAndCostMatrices.mat');
+% 
+% t_fine = time_instances;
+% u_fine = u_nom;
+% x_fine = x_nom;
+% 
+% K_fine = K;
+% P_fine = P;
+% 
+% clearvars -except t_fine u_fine x_fine K_fine P_fine
+% 
+% load('./precomputedData/nominalTrajectory.mat');
+% [x_coarse, u_coarse] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, time_instances);
+% 
+% K_coarse = downsample_matrix(K_fine, t_fine, time_instances);
+% P_coarse = downsample_matrix(P_fine, t_fine, time_instances);
+% 
+% close all;
+% for i = 1:12
+%     figure;
+%     plot(time_instances, x_nom(i,:), '--b', 'LineWidth', 1.5);
+%     hold on
+%     plot(time_instances, x_coarse(i,:), '-k', 'LineWidth', 1.2);
+%     grid on
+%     xlabel('time [s]');
+%     ylabel(['x_{', num2str(i), '}'])
+% end
+% 
+% for i = 1:4
+%     figure;
+%     plot(time_instances, u_nom(i,:), '--b', 'LineWidth', 1.5);
+%     hold on
+%     plot(time_instances, u_coarse(i,:), '-k', 'LineWidth', 1.2);
+%     grid on
+%     xlabel('time [s]');
+%     ylabel(['u_{', num2str(i), '}'])
+% end
+
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
-close all;
+close all; clearvars;
+
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1e-3; %a measure of max initial perturbations to state
+startMaxPerturbation = 1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
+upsamplingFactor = 40; %finer discretization to prevent integration error build-up
+                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
+                         
 run("./utils/checkClosedLoop_MCRollouts.m");
 
 % for k = 1:25
@@ -105,6 +172,7 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 %     drawnow
 % end
 
+keyboard
 %% [Optional] Load all the saved files for further analysis
 
 clearvars; %close all;
@@ -151,9 +219,9 @@ maxIter = 1; %maximum number of iterations
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 1e-1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = -10; %[TUNEABLE] c: decrease value if initial guess fails
+rhoInitialGuessExpCoeff = -5; %[TUNEABLE] c: decrease value if initial guess fails
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
@@ -275,7 +343,8 @@ function kappa = matrix_condition_number(A, norm_type)
     % Check if matrix is square
     [m, n] = size(A);
     if m ~= n
-        error('Matrix must be square');
+        disp('Matrix must be square');
+        return
     end
     
     % Check if matrix is singular
@@ -343,4 +412,40 @@ function plotOneLevelSet_3D(x_nom, ellipsoidMatrix, projectionDims)
     xlabel(['x_{', num2str(projectionDims(1)), '}'])
     ylabel(['x_{', num2str(projectionDims(2)), '}'])
     zlabel(['x_{', num2str(projectionDims(3)), '}'])
+end
+
+%downsamples state and control trajectories to match with given (coarse) time samples
+function [x_coarse, u_coarse] = downsample_state_control_trajectories(t_fine, x_fine, u_fine, t_coarse)
+    
+    % Dimensions
+    N = length(t_coarse); n = size(x_fine, 1); m = size(u_fine, 1);
+
+    % Downsample to match original time vector t
+    x_coarse = zeros(n, N);  % n x N
+    u_coarse = zeros(m, N);  % m x N
+    
+    for i = 1:n
+        x_coarse(i, :) = interp1(t_fine, x_fine(i, :), t_coarse, 'spline');  % or 'pchip' if smoother
+    end
+    
+    for i = 1:m
+        u_coarse(i, :) = interp1(t_fine, u_fine(i, :), t_coarse, 'linear');
+    end
+end
+
+%downsamples an input matrix to match with the given (coarse) time samples
+function M_coarse = downsample_matrix(M_fine, t_fine, t_coarse)
+    % M_fine  : d1 × d2 × Nd
+    % t_fine  : 1 × Nd
+    % t_coarse: 1 × N (time vector corresponding to downsampling)
+    
+    [dim1, dim2, ~] = size(M_fine); N = length(t_coarse);
+    
+    M_coarse = zeros(dim1, dim2, N);
+    for i = 1:dim1
+        for j = 1:dim2
+            M_coarse(i, j, :) = interp1(t_fine, squeeze(M_fine(i, j, :)), t_coarse, 'linear');
+            %note: 'linear' and 'spline' (cubic) don't seem to have much difference here
+        end
+    end
 end

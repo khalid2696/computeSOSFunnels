@@ -20,7 +20,7 @@ load('./precomputedData/nominalTrajectory.mat');
 
 %finer discretization to prevent integration error build-up
 if ~exist('upsamplingFactor','var')
-    upsamplingFactor = 20;
+    upsamplingFactor = 1;
 end
 
 % Cost matrices
@@ -75,17 +75,19 @@ end
 Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
 [K_cont, P_cont] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, P_f, Ts, 'continuous');
 
-% %% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
-% 
-% % Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
-% 
-% Nd = N*upsamplingFactor; % number of interpolated points
-% 
-% % Fine time vector for interpolation: upsampled spacing
-% t_fine = linspace(time_instances(1), time_instances(end), Nd);
-% 
-% [x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
-% 
+%% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
+
+% Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
+Nd = N*upsamplingFactor; % number of interpolated points
+
+% Fine time vector for interpolation: upsampled spacing
+t_fine = linspace(time_instances(1), time_instances(end), Nd);
+
+[x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
+
+Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
+[K_fine, P_fine] = compute_tvlqr_gains(f, x, u, x_fine, u_fine, Q, R, P_f, Ts, 'continuous');
+
 % % Compute time-sampled TVLQR Gains on a finer discretization
 % 
 % Ts = (t_fine(end)-t_fine(1))/(length(t_fine)-1); 
@@ -110,15 +112,19 @@ Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
 
 %% Choose the matrices computed from one of the two methods
 
-K = K_cont;
-P = P_cont;
+time_instances = t_fine;
+x_nom = x_fine;
+u_nom = u_fine;
+
+K = K_fine;
+P = P_fine;
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');
 
 %% save the nominal trajectory and LQR gains and cost-to-go matrices
 f_sym = f;
-save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'K', 'P', 'f_sym');
+save('./precomputedData/LQRGainsAndCostMatrices.mat', 'time_instances', 'x_nom', 'u_nom', 'K', 'P', 'f_sym');
 
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
@@ -197,6 +203,22 @@ function [x_coarse, u_coarse] = downsample_state_control_trajectories(t_fine, x_
     end
 end
 
+%Interpolates an input matrix
+function M_fine = upsample_matrix(M_coarse, t_coarse, t_fine)
+    % M_coarse: d1 × d2 × N
+    % t_coarse: 1 × N
+    % t_fine  : 1 × Nd (time vector corresponding to upsampling)
+    
+    [dim1, dim2, ~] = size(M_coarse); N_fine = length(t_fine);
+    
+    M_fine = zeros(dim1, dim2, N_fine);
+    for i = 1:dim1
+        for j = 1:dim2
+            M_fine(i, j, :) = interp1(t_coarse, squeeze(M_coarse(i, j, :)), t_fine, 'linear');
+        end
+    end
+end
+
 %downsamples an input matrix to match with the given (coarse) time samples
 function M_coarse = downsample_matrix(M_fine, t_fine, t_coarse)
     % M_fine  : d1 × d2 × Nd
@@ -210,22 +232,6 @@ function M_coarse = downsample_matrix(M_fine, t_fine, t_coarse)
         for j = 1:dim2
             M_coarse(i, j, :) = interp1(t_fine, squeeze(M_fine(i, j, :)), t_coarse, 'linear');
             %note: 'linear' and 'spline' (cubic) don't seem to have much difference here
-        end
-    end
-end
-
-%Interpolates an input matrix
-function M_fine = upsample_matrix(M_coarse, t_coarse, t_fine)
-    % M_coarse: d1 × d2 × N
-    % t_coarse: 1 × N
-    % t_fine  : 1 × Nd (time vector corresponding to upsampling)
-    
-    [dim1, dim2, ~] = size(M_coarse); N_fine = length(t_fine);
-    
-    M_fine = zeros(dim1, dim2, N_fine);
-    for i = 1:dim1
-        for j = 1:dim2
-            M_fine(i, j, :) = interp1(t_coarse, squeeze(M_coarse(i, j, :)), t_fine, 'linear');
         end
     end
 end

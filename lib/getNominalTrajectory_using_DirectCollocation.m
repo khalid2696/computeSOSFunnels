@@ -7,8 +7,8 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     %% Optimisation parameters - cost function and state/input constraints
     timeHorizon_weight = 1;
     controlEffort_weight = 0.25;
-    controlSmoothnessWeight = 0.5;     % NEW: Penalize control derivatives
-    velocitySmoothnessWeight = 0.2;    % NEW: Penalize state derivatives
+    controlSmoothnessWeight = 10;     % NEW: Penalize control derivatives
+    velocitySmoothnessWeight = 20;    % NEW: Penalize state derivatives
     
     %state constraints
     rollSaturation = [-pi/4 pi/4]; %small roll and pitch angles
@@ -17,7 +17,7 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
 
     %input saturations
     Weight = m*g;
-    thrustSaturation = [0 2*Weight]; %considering a T/W ratio
+    thrustSaturation = [0 2*Weight]; %considering a T/W ratio of 2
     momentSaturation = [-1 1];
     
     %% Define Decision variables 
@@ -123,7 +123,12 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     % thrust coefficient (k), counter-moment coefficient (d) and arm length (l)
     constraints = [constraints, thrustSaturation(1) <= U(1,:), U(1,:) <= thrustSaturation(2)]; % Thrust
     constraints = [constraints, momentSaturation(1) <= U(2:4,:), U(2:4,:) <= momentSaturation(2)]; % Torques
-    constraints = [constraints, U(1,end) == Weight]; %hover at terminal state
+    
+    %hover at terminal state
+    constraints = [constraints, U(1,end-5:end) == Weight]; %hover at terminal state
+    constraints = [constraints, U(2,end-5:end) == 0];
+    constraints = [constraints, U(3,end-5:end) == 0];
+    constraints = [constraints, U(4,end-5:end) == 0];
     
     %% Solve using IPOPT
     %options = sdpsettings('solver', 'ipopt', 'verbose', 2);
