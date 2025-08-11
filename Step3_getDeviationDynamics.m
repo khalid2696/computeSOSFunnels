@@ -34,7 +34,7 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 %% Inherit parameters if they exist in the wrapper file
 
 if ~exist('order','var')
-    order = 3; %default order of Taylor expansion
+    order = 1; %default order of Taylor expansion
 end
 
 %% Symbolic Taylor expansion for any general expansion point 'a'
@@ -61,11 +61,16 @@ disp(' ');
 % this expression will be in terms of vars and expansion point_a
 %INDEPENDENT of the hyper-parameters used in traj optimisation or feedback controller synthesis 
 %DEPENDENT only on system dynamics f, and the parameters in the mathematical equations of f.
+%so, if you modify the physical parameters of the system, you'll have to
+%redo the above taylor approximation computation
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
-load('./precomputedData/taylorApproxDynamicsSym.mat');
+%load('./precomputedData/taylorApproxDynamicsSym.mat');
 
+%load('./precomputedData/taylorApprox_degree2.mat');
+load('./precomputedData/taylorApprox_degree3.mat');
+%keyboard
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
 %for debugging purposes

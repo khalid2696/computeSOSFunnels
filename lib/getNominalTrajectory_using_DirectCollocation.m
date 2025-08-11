@@ -5,15 +5,15 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     m = quadParameters.m; g = quadParameters.g;
 
     %% Optimisation parameters - cost function and state/input constraints
-    timeHorizon_weight = 1;
+    timeHorizon_weight = 0.75; %1
     controlEffort_weight = 0.25;
-    controlSmoothnessWeight = 10;     % NEW: Penalize control derivatives
-    velocitySmoothnessWeight = 20;    % NEW: Penalize state derivatives
+    controlSmoothnessWeight = 20;  %10    % NEW: Penalize control derivatives
+    velocitySmoothnessWeight = 20; %20    % NEW: Penalize state derivatives
     
     %state constraints
-    rollSaturation = [-pi/4 pi/4]; %small roll and pitch angles
-    pitchSaturation = [-pi/4 pi/4];
-    yawSaturation = [-pi/2 pi/2]; %heading angle
+    rollSaturation = [-pi/6 pi/6]; %small roll and pitch angles
+    pitchSaturation = [-pi/6 pi/6];
+    yawSaturation = [-pi/6 pi/6]; %heading angle
 
     %input saturations
     Weight = m*g;
@@ -22,17 +22,14 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     
     %% Define Decision variables 
     T = sdpvar(1); %for time horizon
+    %T = T_max;
     dt = T / (N-1); % Adaptive time step
-    
+
     % State Variables: [pos, vel, attitude, omega]
     X = sdpvar(12, N); % Position (3), velocity (3), Euler angles (3), angular velocity (3)
-    U = sdpvar(4, N); % Thrust (1) and torques (3)
+    U = sdpvar(4, N); % Thrust (1) and torques (3)  
     
-    %% Constraints and Objective
-    constraints = [0.1 <= T, T <= T_max]; % Time horizon bounds
-    
-    
-    % % Cost Objective
+    %% Cost Objective
     % 
     % cost = timeHorizon_weight * T; % Penalize total time taken
     % 
@@ -44,7 +41,8 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     %     cost = cost + controlEffort_weight * norm(U(:, k), 2)^2;
     % end
 
-%% Cost Objective with smoothness regularization
+    %% Cost Objective with smoothness regularization
+    %cost = 0;
     cost = timeHorizon_weight * T; % Base time penalty
     
     for k = 1:N-1
@@ -75,68 +73,90 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
                 cost = cost + velocitySmoothnessWeight * vel_change^2;
             end
         end
-
-        % % Soft input saturation penalties (gentler than hard constraints)
-        % input_penalty_weight = 0.01;
-        % for i = 1:4
-        %     % Exponential penalty when approaching limits
-        %     if i == 1 % Thrust
-        %         cost = cost + input_penalty_weight * exp(max(0, U(i,k) - 1.8*Weight));
-        %         cost = cost + input_penalty_weight * exp(max(0, 0.2*Weight - U(i,k)));
-        %     else % Moments
-        %         cost = cost + input_penalty_weight * (exp(max(0, U(i,k) - 0.8)) + exp(max(0, -0.8 - U(i,k))));
-        %     end
-        % end
     end
     
+    %% Constraints
+
+    constraints = [];
+    constraints = [0.1 <= T, T <= T_max]; % Time horizon bounds
+
     % Dynamics constraints (collocation)
     for k = 1:N-1
         xk = X(:, k);
         uk = U(:, k);
         
         % Compute nonlinear dynamics
+
+        %Euler integration
+        %f_k = quadrotor_dynamics(xk, uk);
+        %x_next = xk + dt*f_k;
+        
+        %Trapezoidal integration
         f_k = quadrotor_dynamics(xk, uk);
         f_k_next = quadrotor_dynamics(X(:, k+1), uk);
-    
-        %x_next = xk + dt*f_k; %Euler integration
-        x_next = xk + (dt/2) * (f_k + f_k_next); %trapezoidal integration
+        x_next = xk + (dt/2) * (f_k + f_k_next); 
+
+        %RK4 integration
+        %k1 = quadrotor_dynamics(xk, uk);
+        %k2 = quadrotor_dynamics(xk + 0.5 * dt * k1, uk);
+        %k3 = quadrotor_dynamics(xk + 0.5 * dt * k2, uk);
+        %k4 = quadrotor_dynamics(xk + dt * k3, uk);
+        %x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
         
-        % Trapezoidal integration with variable time step
+        % Enforce dynamics constraints
         constraints = [constraints, X(:, k+1) == x_next];
     end
-    
+
     % Initial and final state constraints
     constraints = [constraints, X(:,1) == x0, X(:,end) == xf];
     
     %state constraints
-    constraints = [constraints, 0 <= X(3,:)]; % height should be greater than zero
+    % height should be greater than zero
+    constraints = [constraints, 0 <= X(3,:)]; 
     
     %small roll and pitch angles
     constraints = [constraints, rollSaturation(1) <= X(7,:), X(7,:) <= rollSaturation(2)];
     constraints = [constraints, pitchSaturation(1) <= X(8,:), X(8,:) <= pitchSaturation(2)];
+    
     %heading angle (yaw) constrained to not deviate too much from 'North'
     constraints = [constraints, yawSaturation(1) <= X(9,:), X(9,:) <= yawSaturation(2)];
-    
     
     % Control input constraints -- thrust and moments 
     % Rotor speeds can be computed using the mixer model with parameters: 
     % thrust coefficient (k), counter-moment coefficient (d) and arm length (l)
     constraints = [constraints, thrustSaturation(1) <= U(1,:), U(1,:) <= thrustSaturation(2)]; % Thrust
-    constraints = [constraints, momentSaturation(1) <= U(2:4,:), U(2:4,:) <= momentSaturation(2)]; % Torques
-    
+    constraints = [constraints, momentSaturation(1) <= U(2,:), U(2,:) <= momentSaturation(2)]; % Torques
+    constraints = [constraints, momentSaturation(1) <= U(3,:), U(3,:) <= momentSaturation(2)]; % Torques
+    constraints = [constraints, momentSaturation(1) <= U(4,:), U(4,:) <= momentSaturation(2)]; % Torques
+
     %hover at terminal state
-    constraints = [constraints, U(1,end-5:end) == Weight]; %hover at terminal state
-    constraints = [constraints, U(2,end-5:end) == 0];
-    constraints = [constraints, U(3,end-5:end) == 0];
-    constraints = [constraints, U(4,end-5:end) == 0];
+    constraints = [constraints, U(1,end:end) == Weight]; %hover at terminal state
+    constraints = [constraints, U(2,end:end) == 0];
+    constraints = [constraints, U(3,end:end) == 0];
+    constraints = [constraints, U(4,end:end) == 0];
+    
+    % %constraints on jerky inputs
+    % for k=2:N
+    %     thrust_change = U(1,k) - U(1,k-1);
+    %     constraints = [constraints, -2 <= thrust_change/dt, thrust_change/dt <= 2]; 
+    % 
+    %         % Penalize changes in moments
+    %         for i = 2:4
+    %             moment_change = U(i,k) - U(i,k-1);
+    %             constraints = [constraints, -2 <= moment_change/dt, moment_change/dt <= 2];
+    %         end
+    % end
     
     %% Solve using IPOPT
     %options = sdpsettings('solver', 'ipopt', 'verbose', 2);
-    options = sdpsettings('solver', 'ipopt', 'verbose', 1);
-    options.ipopt.max_iter = 3000; % Set the desired tolerance
+    options = sdpsettings('solver', 'ipopt', 'verbose', 2);
+    options.ipopt.max_iter = 5000; % Set the desired tolerance
     options.ipopt.tol = 1e-6; % Set the desired tolerance
     options.ipopt.acceptable_tol = 1e-4; % Set the acceptable tolerance 
     options.ipopt.acceptable_iter = 100; % Number of iterations for acceptable termination
+    
+    %numVars = getvariables(constraints);
+    %length(unique(numVars))
     
     diagnostics = optimize(constraints, cost, options);
     

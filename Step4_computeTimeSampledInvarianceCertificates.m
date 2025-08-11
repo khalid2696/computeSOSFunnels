@@ -1,5 +1,4 @@
 %clc; clearvars; close all
-
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
@@ -7,6 +6,12 @@ warning('off','MATLAB:singularMatrix');
 load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 load('./precomputedData/deviationDynamics.mat');
+
+if ~exist('drawFlag','var')
+    drawFlag = 1; %by default, plot the results
+end
+
+%usageMode = 'shapeOptimisation';
 
 %% Status message
 %Quantities at our disposal now
@@ -24,6 +29,19 @@ load('./precomputedData/deviationDynamics.mat');
 %Note: cost-to-go matrices, P will be used for candidate Lyapunov functions
 %Warning: systemPolyDynamics may not be useful because it's in terms of syms type variables 
 
+% truncation_time = 7;
+% time_instances = [time_instances(1:end-truncation_time), time_instances(end)];
+% x_nom = [x_nom(:,1:end-truncation_time), x_nom(:,end)];
+% u_nom = [u_nom(:,1:end-truncation_time), u_nom(:,end)];
+% 
+% K_temp = K(:,:,end);
+% K = K(:,:,1:end-truncation_time); K(:,:,end+1) = K_temp;
+% P_temp = P(:,:,end);
+% P = P(:,:,1:end-truncation_time); P(:,:,end+1) = P_temp;
+%
+%deviationDynamics = [deviationDynamics(1:end-truncation_time), deviationDynamics(end)];
+%
+
 N = length(time_instances);
 n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 
@@ -32,28 +50,32 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 % 1. Parameters pertaining to SOS Programming
 options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
                           %options -- mosek/sedumi
+%options.Solver = 'ode15s';
+%options.params.tol = 1e-1; %relaxing from 1e-9 to a lower tolerance value
+%options.params.alg = 2; %x-z linearisation by default (read Sedumi documentation)
+
 multiplierPolyDeg = 2; %polynomial multiplier of predefined degree
 LyapunovFnDeg = 2;     %quadratic Lyapunov function
-tolerance = 1e-9;
+tolerance = 0; %1e-6
 convergenceTolerance = 1e-2; %if less than 1 percent change
 
 % 2. Parameters pertaining to Alternation Scheme (SCP) -- feasibility step and optimisation step             
 if ~exist('maxIter','var')
     maxIter = 1; %maximum number of iterations
 end
-rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
+rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
                        %Default Value: 0.001
 
 % 3. Parameters pertaining to defining terminal set/goal region
-startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
+startScaling = 0.5; %[TUNEABLE] increase this for a larger initial region
                     %decrease if computed funnel is weirdly shaped
-goalScaling = 0.4;  %Keep it less than 1
+goalScaling = 0.2;  %Keep it less than 1
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % Exponentially evolving rho_guess
-% rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)), 
-% t_k = tf --> rhoVal = rho_0; t_k = 0 --> rhoVal = (rho_0/e^c); 
+% rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)), 
+% t_k = tf --> rhoVal = rho_0; t_k = t0 --> rhoVal = (rho_0*e^c); 
 
 %[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
@@ -65,7 +87,7 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = -2.5;
+    rhoInitialGuessExpCoeff = -2.5; %c
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -96,35 +118,43 @@ startRegionEllipsoidMatrix = (1/startScaling)*P(:,:,1)/rhoInitialGuess(1);
 
 %% Plot guess funnel and start/end regions
 
-%plot(time_instances, rhoInitialGuess);
-%plotFunnel(x_nom, ellipsoidMatrices, ones(size(rhoInitialGuess)));
+if drawFlag
+    plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    title('Initial guess funnel');
+    plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+    drawnow;
+end
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-title('Initial guess funnel');
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-
-drawnow
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
-%plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-%plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-%plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+if drawFlag
+    %plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+
+    if ~infeasibilityStatus
+        title('Initial guess V and rho scaling (feasible)');
+    else
+        title('Initial guess V and rho scaling (infeasible)');
+    end
+end
 disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
-    title('Initial guess V and rho scaling (feasible)');
     disp('Feasibility check passed for given rho guess..');
 else
-    title('Initial guess V and rho scaling (infeasible)');
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-if strcmp(usageMode, 'feasibilityCheck')
+initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
+initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
+
+if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
     return
 end
 
@@ -145,18 +175,10 @@ for iter=1:maxIter
  
     if ~infeasibilityStatus
         disp('Feasibility-check step: passed'); disp(' ');
-        
-        %plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        %title('A valid funnel certificate');
     end
 
     if infeasibilityStatus
         if iter == 1
-            %plotFunnel(x_nom, P, currRhoScaling);
-            %plotFinalSet(x_nom(:,1), P(:,:,1)/rho_Start);
-            %title('Scaling of cost-go-matrices (unsuccessful)')
             error('Could not find a successful initial guess to start the alternation scheme!')
         else
             disp('Infeasibility! Exiting the alternation scheme..')
@@ -192,15 +214,20 @@ for iter=1:maxIter
         V_polyFn = sol_candidateVArray{k};
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
+
+	disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+        disp(' ');
     end
 
     if ~infeasibilityStatus
         disp('Optimisation step: passed'); disp(' ');
         
-        plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        
+        if drawFlag
+            plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
+            plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+            plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+        end
+
         title('Optimised funnel certificate');
         
         % display some volumetric properties
@@ -240,12 +267,10 @@ disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellip
 
 %% Status message
 
-clc
-
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
 disp(' ');
 
-%% Save the multipliers, caniddate V and level-set boundary value to a file
+%% Save the multipliers, candidate V and level-set boundary value to a file
 
 rhoScaling = prevRhoScaling;
 multiplierTerms = feasibleMultiplierTerms;
@@ -275,7 +300,7 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     %initialise the SOS program
     prog = sosprogram(xbar);
     
-    for k = 2:1:N 
+    for k = 2:1:N
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -321,7 +346,7 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     % 5. Outlet constraints -- outlet set contained within the user-defined final set
     outerEllipsoidCondition = 1 - xbar'*M_f*xbar; %given final (ellipsoid) set
     innerEllipsoidCondition = rhoGuess(end) - candidateV{end}; 
-    
+
     [prog,sN] = sossosvar(prog,1); %scalar multiplier
     lagrangeMultipliers{end} = sN;
     prog = sosineq(prog, outerEllipsoidCondition - sN*innerEllipsoidCondition - tolerance*(xbar'*xbar));  
@@ -337,7 +362,7 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     end
 
     %extract the solution and store it in a cell array
-    for k= 2:1:N+1
+    for k= 2:1:N %N+1
         temp_sol = sosgetsol(prog,lagrangeMultipliers{k});
         %temp_sol = temp_sol/max(temp_sol.coefficient); %normalise the coefficients
         %temp_sol = cleanpoly(temp_sol, tolerance); %clean up the terms (remove coefficients smaller than tolerance)
@@ -490,7 +515,6 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         end
     
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
-        
     end
 end
 
@@ -518,6 +542,44 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     end
     
     M = full(M);
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
 end
 
 %% Plotting functions

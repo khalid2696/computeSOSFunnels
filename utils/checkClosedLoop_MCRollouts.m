@@ -43,6 +43,7 @@ end
 %% Upsample trajectories and matrices for forward rollouts
 
 Nd = N*upsamplingFactor; % number of interpolated points
+startTimeIndex = (startTimeIndex-1)*upsamplingFactor + 1;
 
 % Fine time vector for interpolation: upsampled spacing
 t_fine = linspace(time_instances(1), time_instances(end), Nd);
@@ -114,14 +115,14 @@ disp(' ');
 plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
 %plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
 
-%plot state trajectories
-plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [1 2 3]);    %position
-plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [4 5 6]);    %velocity
-plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [7 8 9]);    %attitude
-plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [10 11 12]); %body rates
-
-plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
-plot_error_metrics(errors, costs, rollout_time_horizon);
+% %plot state trajectories
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [1 2 3]);    %position
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [4 5 6]);    %velocity
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [7 8 9]);    %attitude
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [10 11 12]); %body rates
+% 
+% plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
+% plot_error_metrics(errors, costs, rollout_time_horizon);
 
 clearvars;
 

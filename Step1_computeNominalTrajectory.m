@@ -40,7 +40,7 @@ end
 if exist('maxTimeHorizon','var')
     T_max = maxTimeHorizon;          
 else
-    T_max = 5;  %some default value
+    T_max = 10;  %some default value
 end
 
 if ~exist('drawFlag','var')
@@ -54,10 +54,9 @@ xf = [pf; zeros(3,1); eulerf; zeros(3,1)]; %end at zero linear/angular velocitie
 
 %% Nominal trajectory and nominal/open-loop control input (feedforward term)
 
-%dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
-
 tic
-[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N, quadParameters);
+[x_nom, u_nom, time_instances, nom_trajCost, diagnostics] = ...
+        getNominalTrajectory_using_DirectCollocation(dynamicsFnHandle, x0, xf, T_max, N, quadParameters);
 toc
 
 disp('Finshed computing nominal trajectory and nominal (feedforward) input tape');
@@ -67,6 +66,8 @@ if diagnostics.problem ~= 0 %if the optimisation fails, relax the time-horizon a
     disp(diagnostics.info);
     error('Failed to compute a feasible nominal trajectory! Cannot proceed.. Exitting!');
 end
+
+
 
 %% save the nominal trajectory and feedforward input
 save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'dynamicsFnHandle', 'quadParameters');
@@ -78,15 +79,56 @@ disp(' ');
 
 if drawFlag
     
-    figure;
-    plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
+    figure; plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
     
     % ---- Just for dev and debug -----%
-    plot_Euler_angles(time_instances, x_nom);
-    plot_input_profiles(time_instances, u_nom);
+    figure; plot_Euler_angles(time_instances, x_nom);
+    figure; plot_linear_velocities(time_instances, x_nom)
+    figure; plot_angular_velocities(time_instances, x_nom)
+
+    figure; plot_input_profiles(time_instances, u_nom);
 end
 
 clearvars; %cleanup the workspace after saving relevant data and plotting
+
+%% for debugging purposes
+drawFlag = 0;
+
+load('./precomputedData/nominalTrajectory.mat');
+
+tspan = [time_instances(1), time_instances(end)];
+
+% Solve IVP
+x0 = x_nom(:,1);
+[t_sol, x_sol] = ode15s(@(t,x) ...
+    ode_wrapper(t, x, time_instances, u_nom', dynamicsFnHandle), ...
+    tspan, x0);
+t_sol = t_sol';
+x_sol = x_sol';
+u_sol = interp1(time_instances, u_nom', t_sol, 'linear')';
+
+x_coarse = interp1(t_sol, x_sol', time_instances, 'spline')';
+
+if drawFlag
+    
+    figure; plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
+    figure; plot_flat_outputs(t_sol, x_sol, 2.5);
+
+    % ---- Just for dev and debug -----%
+    figure; plot_Euler_angles(time_instances, x_nom);
+    figure; plot_Euler_angles(t_sol, x_sol);
+
+    figure; plot_linear_velocities(time_instances, x_nom);
+    figure; plot_linear_velocities(t_sol, x_sol);
+
+    figure; plot_angular_velocities(time_instances, x_nom)
+    figure; plot_angular_velocities(t_sol, x_sol);
+
+    figure; plot_input_profiles(time_instances, u_nom);
+    figure; plot_input_profiles(t_sol, u_sol);
+end
+
+[x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_sol);
 
 %% Local Function definitions
 
@@ -97,7 +139,7 @@ clearvars; %cleanup the workspace after saving relevant data and plotting
 %     cr = cos(roll/2); sr = sin(roll/2);
 %     cp = cos(pitch/2); sp = sin(pitch/2);
 %     cy = cos(yaw/2); sy = sin(yaw/2);
-% 
+% s
 %     q = [cr*cp*cy + sr*sp*sy; % w
 %          sr*cp*cy - cr*sp*sy; % x
 %          cr*sp*cy + sr*cp*sy; % y
@@ -116,6 +158,35 @@ clearvars; %cleanup the workspace after saving relevant data and plotting
 %     % Return as a column vector
 %     euler = [roll; pitch; yaw];
 % end
+
+% ODE wrapper function
+function xdot = ode_wrapper(t, x, time_instances, u_nom, dynamicsFnHandle)
+    
+    u = interp1(time_instances, u_nom, t, 'previous', 'extrap');  % hold last value
+    
+    xdot = dynamicsFnHandle(x, u);
+end
+
+%Interpolates state and control vectors
+function [x_fine, u_fine, t_fine] = upsample_state_control_trajectories(t, x, u, t_fine)
+
+    % Dimensions
+    Nd = length(t_fine); n = size(x, 1); m = size(u, 1);
+
+    % Preallocate outputs
+    x_fine = zeros(n, Nd);
+    u_fine = zeros(m, Nd);
+
+    % Interpolate each row (dimension) of x with cubic spline
+    for i = 1:n
+        x_fine(i, :) = interp1(t, x(i, :), t_fine, 'spline'); % Cubic interpolation
+    end
+
+    % Interpolate each row (dimension) of u with linear interpolation
+    for i = 1:m
+        u_fine(i, :) = interp1(t, u(i, :), t_fine, 'linear'); % Linear interpolation
+    end
+end
 
 
 function plot_flat_outputs(time_instances, x_nom, scaling)
@@ -204,7 +275,6 @@ end
 
 
 function plot_input_profiles(time_instances_opt, u_opt)
-    figure;
 
     subplot(4,1,1)
     plot(time_instances_opt, u_opt(1,:)); %total thrust
@@ -223,44 +293,69 @@ function plot_input_profiles(time_instances_opt, u_opt)
     ylabel('M_r [N-m]');
 end
 
-% function plot_quaternions(time_instances_opt, x_opt)
-%     figure; title('Quaternion');
-% 
-%     subplot(4,1,1)
-%     plot(time_instances_opt, x_opt(7,:)); 
-%     ylabel('q_0');
-% 
-%     subplot(4,1,2)
-%     plot(time_instances_opt, x_opt(8,:)); 
-%     ylabel('q_1');
-% 
-%     subplot(4,1,3)
-%     plot(time_instances_opt, x_opt(9,:)); 
-%     ylabel('q_2');
-% 
-%     subplot(4,1,4)
-%     plot(time_instances_opt, x_opt(10,:)); 
-%     ylabel('q_3');
-% end
-
 function plot_Euler_angles(time_instances_opt, x_opt)
     
 
     % Euler angles
-    figure; title('Euler angles');
+    title('Euler angles');
     
     subplot(3,1,1)
-    plot(time_instances_opt, x_opt(7,:)*180/pi); %roll
+    plot(time_instances_opt, x_opt(7,:)*180/pi); %phi
     xlabel('time');
-    ylabel('Roll [deg]');
+    ylabel('phi [deg]');
     
     subplot(3,1,2)
-    plot(time_instances_opt, x_opt(8,:)*180/pi); %pitch
+    plot(time_instances_opt, x_opt(8,:)*180/pi); %theta
     xlabel('time');
-    ylabel('Pitch [deg]');
+    ylabel('theta [deg]');
     
     subplot(3,1,3)
-    plot(time_instances_opt, x_opt(9,:)*180/pi); %yaw
+    plot(time_instances_opt, x_opt(9,:)*180/pi); %psi
     xlabel('time');
-    ylabel('Yaw [deg]');
+    ylabel('psi [deg]');
 end
+
+function plot_linear_velocities(time_instances_opt, x_opt)
+    
+
+    % Euler angles
+    title('Linear Velocities');
+    
+    subplot(3,1,1)
+    plot(time_instances_opt, x_opt(4,:)); %v_x
+    xlabel('time');
+    ylabel('v_x [m/s]');
+    
+    subplot(3,1,2)
+    plot(time_instances_opt, x_opt(5,:)); %v_y
+    xlabel('time');
+    ylabel('v_y [m/s]');
+    
+    subplot(3,1,3)
+    plot(time_instances_opt, x_opt(6,:)); %v_z
+    xlabel('time');
+    ylabel('v_z [m/s]');
+end
+
+function plot_angular_velocities(time_instances_opt, x_opt)
+    
+
+    % Euler angles
+    title('Angular velocities');
+    
+    subplot(3,1,1)
+    plot(time_instances_opt, x_opt(10,:)); %p
+    xlabel('time');
+    ylabel('p [rad/s]');
+    
+    subplot(3,1,2)
+    plot(time_instances_opt, x_opt(11,:)); %q
+    xlabel('time');
+    ylabel('q [rad/s]');
+    
+    subplot(3,1,3)
+    plot(time_instances_opt, x_opt(12,:)); %r
+    xlabel('time');
+    ylabel('r [rad/s]');
+end
+

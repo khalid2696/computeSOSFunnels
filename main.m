@@ -1,5 +1,6 @@
 clc; clearvars; close all;
 
+keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -13,11 +14,11 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [4; 2; 2; 0; 0; 0];  % desired final pose
+finalPose   = [4; 2; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
-quadParameters.m = 0.7;        % mass (kg)
-quadParameters.g = 9.81;       % gravity (m/s^2)
+quadParameters.m = 0.7;                  % mass (kg)
+quadParameters.g = 9.81;                 % gravity (m/s^2)
 quadParameters.J = [2e-3, 2e-3, 3.5e-3]; % moment of inertia (kg⋅m^2) %[4.856e-3, 4.856e-3, 8.801e-3]
 
 %% Define the system dynamics as a function handle
@@ -25,20 +26,21 @@ dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 10;
-numTimeSteps = 25;         % number of time samples
+maxTimeHorizon = 15;
+numTimeSteps   = 35;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
 %keyboard
+
 %% Design a time-varying LQR feedback controller
 clearvars
 %upsamplingFactor = 1; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
-%Cost matrices40
+%Cost matrices
 % State order: [px; py; pz; vx; vy; vz; phi; theta; psi; p; q; r]
 % Q = 0.01*diag([
 %     50,  50,  80, ...   % Position weights [px, py, pz]
@@ -49,28 +51,24 @@ clearvars
 Q = 0.1*diag([
     100,  100,  400, ...   % Position weights [px, py, pz]
     4,  4,  25,  ...   % Velocity weights [vx, vy, vz]
-    400,  400,  100,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+    200,  200,  100,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
     4, 4,  4  ]);   % Angular rate weights [p, q, r]
 
-%Q = 10*eye(12);
-
-% Control order: [T; Mx; My; Mz]
-% R = 1000*diag([
-%     0.5, ...    % Thrust
-%     0.05,  ...   % Roll moment Mx
-%     0.05,  ...   % Pitch moment My
-%     0.05  ]);   % Yaw moment Mz
+Q = 0.1*eye(12);
+Q(3,3) = 0.4;
+Q(7,7) = 10; Q(8,8) = 10; Q(9,9) = 10;
+Q(10,10) = 1; Q(11,11) = 1; Q(12,12) = 1;
 
 R = 10*diag([
-    0.16, ...    % Thrust
+    0.2, ...    % Thrust
     1,  ...   % Roll moment Mx
     1,  ...   % Pitch moment My
     1  ]);   % Yaw moment Mz
 
-%R = eye(4);
+R = 10*eye(4);
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
-terminalRegionScaling = 10; % Terminal constraint cost
+terminalRegionScaling = 1; % Terminal constraint cost
                             %[TUNEABLE] increasing this would decrease the volume of the terminal matrix, P_f
                             %and hence increase the terminal cost term (improve tracking/convergence performance) 
                             % most probably, values greater than 1 would work
@@ -90,7 +88,7 @@ end
 close all; clearvars;
 
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1; %a measure of max initial perturbations to state
+startMaxPerturbation = 0.05; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
 upsamplingFactor = 40; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
@@ -100,7 +98,7 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 % for k = 1:25
 % 
 %     startTimeIndex = k
-%     startMaxPerturbation = 0.005;
+%     startMaxPerturbation = 0.05;
 % 
 %     clearvars -except startMaxPerturbation startTimeIndex
 % 
@@ -148,6 +146,8 @@ disp('- - - - - - -'); disp(" ");
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clc; clearvars; close all; 
 
+drawFlag = 1;
+
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
 
@@ -155,9 +155,11 @@ maxIter = 1; %maximum number of iterations
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 1e-1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = -5; %[TUNEABLE] c: decrease value if initial guess fails
+rhoInitialGuessExpCoeff = 3; %[TUNEABLE] c: decrease value if initial guess fails
+
+%1e-3 and 2
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
