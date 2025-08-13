@@ -32,7 +32,8 @@ title('Invariant Ellipsoidal Sets along the nominal trajectory');
 %specifiying the projection dimensions - for example: [1 2 3], [1 3 4], etc.
 
 if ~exist('projectionDims_3D','var')
-    projectionDims_3D = [1 2 3];
+    return
+    %projectionDims_3D = [1 2 3];
 end
 
 plotFunnel_3D(x_nom, ellipsoidMatrices, rhoScaling, projectionDims_3D);

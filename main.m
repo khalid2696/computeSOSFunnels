@@ -14,7 +14,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [5; -2; 2; 0; 0; 0];   % desired final pose
+finalPose   = [-2; -5; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.7;                  % mass (kg)
@@ -48,24 +48,25 @@ clearvars
 %     20,  20,  10,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
 %     100, 100,  100  ]);   % Angular rate weights [p, q, r]
 
-Q = 0.1*diag([
-    100,  100,  400, ...   % Position weights [px, py, pz]
-    4,  4,  25,  ...   % Velocity weights [vx, vy, vz]
-    200,  200,  100,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
-    4, 4,  4  ]);   % Angular rate weights [p, q, r]
+% Q = 0.1*diag([
+%     100,  100,  400, ...   % Position weights [px, py, pz]
+%     4,  4,  25,  ...   % Velocity weights [vx, vy, vz]
+%     200,  200,  100,  ...  % Attitude weights [phi, theta, psi] - roll/pitch higher than yaw
+%     4, 4,  4  ]);   % Angular rate weights [p, q, r]
 
 Q = 0.1*eye(12);
 Q(3,3) = 0.4;
 Q(7,7) = 10; Q(8,8) = 10; Q(9,9) = 10;
 Q(10,10) = 1; Q(11,11) = 1; Q(12,12) = 1;
 
-R = 10*diag([
-    0.2, ...    % Thrust
-    1,  ...   % Roll moment Mx
-    1,  ...   % Pitch moment My
-    1  ]);   % Yaw moment Mz
+% R = 10*diag([
+%     0.2, ...    % Thrust
+%     1,  ...   % Roll moment Mx
+%     1,  ...   % Pitch moment My
+%     1  ]);   % Yaw moment Mz
 
 R = 10*eye(4);
+R(1,1) = 2;
 
 %optionally specify terminal cost matrix scaling, P_f = terminalRegionScaling*P_LQR (infinite-time LQR at final state)
 terminalRegionScaling = 1; % Terminal constraint cost
@@ -94,6 +95,7 @@ upsamplingFactor = 40; %finer discretization to prevent integration error build-
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
                          
 run("./utils/checkClosedLoop_MCRollouts.m");
+drawnow
 
 % for k = 1:25
 % 
@@ -109,30 +111,29 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 %keyboard
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; %close all;
-addpath('./lib/');
+% clearvars; %close all;
+% addpath('./lib/');
+% 
+% load('./precomputedData/nominalTrajectory.mat');
+% load('./precomputedData/LQRGainsAndCostMatrices.mat');
+% 
+% %following functions can take in an additional (optional) argument
+% %specifiying the projection dimensions - for example: [1 2], [1 3], etc.
+% projectionDims_2D = [1 2];
+% plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
+% 
+% projectionDims_3D = [1 2 3];
+% plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+% 
+% projectionDims_3D = [4 5 6];
+% plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+% 
+% projectionDims_3D = [7 8 9];
+% plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
+% 
+% projectionDims_3D = [10 11 12];
+% plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
 
-load('./precomputedData/nominalTrajectory.mat');
-load('./precomputedData/LQRGainsAndCostMatrices.mat');
-
-%following functions can take in an additional (optional) argument
-%specifiying the projection dimensions - for example: [1 2], [1 3], etc.
-projectionDims_2D = [1 2];
-plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
-
-projectionDims_3D = [1 2 3];
-plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
-
-projectionDims_3D = [4 5 6];
-plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
-
-projectionDims_3D = [7 8 9];
-plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
-
-projectionDims_3D = [10 11 12];
-plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
-
-%keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
 order = 3; %order of Taylor expansion
@@ -172,14 +173,16 @@ end
 
 %% optimize once the feasibility check passes through
 close all
+%drawFlag = 1;
 tic
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 toc
+
 %% [Optional] Plot computed funnels
 clc; clearvars; close all
 
-projectionDims_2D = [1 2]; projectionDims_3D = [10 11 12];
+projectionDims_2D = [1 2]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 

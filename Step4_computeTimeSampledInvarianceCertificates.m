@@ -29,19 +29,6 @@ usageMode = 'shapeOptimisation';
 %Note: cost-to-go matrices, P will be used for candidate Lyapunov functions
 %Warning: systemPolyDynamics may not be useful because it's in terms of syms type variables 
 
-% truncation_time = 7;
-% time_instances = [time_instances(1:end-truncation_time), time_instances(end)];
-% x_nom = [x_nom(:,1:end-truncation_time), x_nom(:,end)];
-% u_nom = [u_nom(:,1:end-truncation_time), u_nom(:,end)];
-% 
-% K_temp = K(:,:,end);
-% K = K(:,:,1:end-truncation_time); K(:,:,end+1) = K_temp;
-% P_temp = P(:,:,end);
-% P = P(:,:,1:end-truncation_time); P(:,:,end+1) = P_temp;
-%
-%deviationDynamics = [deviationDynamics(1:end-truncation_time), deviationDynamics(end)];
-%
-
 N = length(time_instances);
 n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 
@@ -50,8 +37,7 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 % 1. Parameters pertaining to SOS Programming
 options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
                           %options -- mosek/sedumi
-%options.Solver = 'ode15s';
-%options.params.tol = 1e-1; %relaxing from 1e-9 to a lower tolerance value
+%options.params.tol = 1e-6; %relaxing from 1e-9 to a lower tolerance value
 %options.params.alg = 2; %x-z linearisation by default (read Sedumi documentation)
 
 multiplierPolyDeg = 2; %polynomial multiplier of predefined degree
@@ -68,9 +54,11 @@ rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
                        %Default Value: 0.001
 
 % 3. Parameters pertaining to defining terminal set/goal region
-startScaling = 0.5; %[TUNEABLE] increase this for a larger initial region
+startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
                     %decrease if computed funnel is weirdly shaped
-goalScaling = 0.2;  %Keep it less than 1
+goalScaling = 0.6;  %Keep it less than 1
+
+%0.5 and 0.2
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % Exponentially evolving rho_guess
@@ -122,10 +110,6 @@ if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
                                                                               multiplierPolyDeg, options, tolerance);
     
     if drawFlag
-        %plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-        %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-    
         if ~infeasibilityStatus
             title('Initial guess V and rho scaling (feasible)');
         else
@@ -214,9 +198,8 @@ for iter=1:maxIter
             plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
             plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
             plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+            title('Optimised funnel certificate');
         end
-
-        title('Optimised funnel certificate');
         
         % display some volumetric properties
         disp('Volume of computed inlet set: '); disp(1/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1))))); disp(' ');
@@ -269,21 +252,9 @@ save('./precomputedData/setInvarianceCertificates.mat', 'time_instances', 'candi
 disp('Saved the time-sampled ellipsoidal matrices parametrizing the invariant sets to a file!');
 disp(' ');
 
-%% local debugging
+%% local debugging snippets
 
-load('./precomputedData/setInvarianceCertificates.mat');
-load('./precomputedData/nominalTrajectory.mat');
 
-for k=1:length(time_instances)
-    V_polyFn = candidateV{k}; n=12;
-    ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
-
-    disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
-    disp(det(ellipsoidMatrices(:,:,k)))
-    disp(' ');
-end
-
-plotFunnel(x_nom, ellipsoidMatrices, rhoScaling, [1 2]);
 %% ---------------------  Function definitions  ----------------------------
 
 %% SOS Program Functions -- the two alternating steps
@@ -404,7 +375,7 @@ function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ..
     end
     
     %imposing SOS constraints
-    % 1. Positive definiteness of V
+    % 1. Positive definiteness of V at index 1
     prog = sosineq(prog, candidateVArray{1} - tolerance*(xbar'*xbar));
 
     objective = 0;
@@ -528,13 +499,18 @@ end
 function M = getEllipsoidMatrix_nD(V_polyFn, n)
     
     %for some reason, SOSTOOLS orders the monomials in this particular
-    %order, 10 12 12 before 2, 21 22 .. before 3, and so on
+    %lexicographic order, 10 12 12 before 2, 21 22 .. before 3, and so on
     %so using that order to retrieve the coefficients and save it
     
-    indexKeySequence = [1 10 11 12 2 3 4 5 6 7 8 9];
+    % Convert numbers to strings for lexicographic sorting
+    indices = 1:n;
+    stringIndices = arrayfun(@num2str, indices, 'UniformOutput', false);
+    
+    % Sort strings lexicographically
+    [~, sorted_indices] = sort(stringIndices);
+    indexKeySequence = indices(sorted_indices);
 
-    %Note: can use some algorithm to get this above sequence solely from input arg: n
-    %but for now, just hard-coding this sequence for the 12-state system
+    %indexKeySequence = [1 10 11 12 2 3 4 5 6 7 8 9];
 
     M = NaN(n); %empty nxn matrix to hold the ellipsoid matrix
     
