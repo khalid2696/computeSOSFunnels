@@ -1,42 +1,7 @@
 clc; clearvars; close all
 
-%% Example 1: Centered ellipsoids
-M1 = [2, 0, 0; 0, 0.5, 0; 0, 0, 4];
-x_c1 = [0; 0; 0];
-
-M2 = [4, 0, 0; 0, 1, 0; 0, 0, 9];
-x_c2 = [0; 0; 0];
-
-% Example 2: Non-centered ellipsoids
-M3 = [6, 0, 0; 0, 3, 0; 0, 0, 1];
-x_c3 = [2; 1; 0];
-
-M4 = [5, 1, 0; 1, 3, 0; 0, 0, 2];
-x_c4 = [1; 2; -1];
-
-% Example 3: Large ellipsoid containing a smaller one
-M5 = [1, 0.1, 0; 0.1, 1, 0; 0, 0, 1];
-x_c5 = [0; 0; 0];
-
-M6 = [4, 0, 0; 0, 4, 0; 0, 0, 4];
-x_c6 = [0.4; 0.1; -0.25];
-
-% Example 4: Highly eccentric ellipsoid
-M7 = [10, 0, 0; 0, 1, 0; 0, 0, 0.1];
-x_c7 = [3; -1; 2];
-
-M8 = [1, 0.2, 0; 0.2, 2, 0; 0, 0, 5];
-x_c8 = [-1; 1; 1];
-
-% Example 5: Random positive definite matrices
-M9 = 0.3*[3, 0.5, 0.1; 0.5, 2, 0.3; 0.1, 0.3, 1.5];
-x_c9 = [0; 1; -1];
-
-M10 = [4, -0.1, 0; -0.1, 3, 0.2; 0, 0.2, 2];
-x_c10 = [0; 0.5; -0.35];
-
-
 load('../precomputedData/nominalTrajectory.mat');
+load('../precomputedData/deviationDynamics.mat');
 load('../precomputedData/setInvarianceCertificates.mat')
 
 funnelInlet = ellipsoidMatrices(:,:,1)/rhoScaling(1);
@@ -45,16 +10,16 @@ funnelOutlet = ellipsoidMatrices(:,:,end)/rhoScaling(end);
 M5 = funnelInlet;
 M6 = funnelOutlet;
 
-x_c5 = x_nom(:,end) + [0.1 -0.1 0.3]';
+x_c5 = x_nom(:,end) + 0.1*[rand(); rand(); 0; zeros(9,1)];
 x_c6 = x_nom(:,end);
 
 %% Assigning matrix parameters
 EllipsoidMatrix1 = M5; EllipsoidCenter1 = x_c5;
 EllipsoidMatrix2 = M6; EllipsoidCenter2 = x_c6;
 
-figure
-plotEllipsoid(EllipsoidMatrix1, EllipsoidCenter1, 'blue');
-plotEllipsoid(EllipsoidMatrix2, EllipsoidCenter2, 'red');
+%figure
+%plotEllipsoid(EllipsoidMatrix1, EllipsoidCenter1, 'blue');
+%plotEllipsoid(EllipsoidMatrix2, EllipsoidCenter2, 'red');
 
 % SDP-check
 tic
@@ -64,11 +29,10 @@ toc
 %% SOS Programming
 
 tic
-pvar x1 x2 x3;   % define pvar "indeterminates"
-x = [x1 x2 x3]'; % define the state vector
 
-options.solver = 'sedumi';
+x = xbar;
 
+options.solver = 'mosek';
 
 %initialise the program
 prog = sosprogram(x);

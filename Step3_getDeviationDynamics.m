@@ -1,4 +1,4 @@
-clc; clearvars; close all
+%clc; clearvars; close all
 
 %% Add directories
 addpath('./lib/');
@@ -34,7 +34,7 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 %% Inherit parameters if they exist in the wrapper file
 
 if ~exist('order','var')
-    order = 1; %default order of Taylor expansion
+    order = 3; %default order of Taylor expansion
 end
 
 %% Symbolic Taylor expansion for any general expansion point 'a'

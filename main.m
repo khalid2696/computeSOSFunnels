@@ -1,6 +1,6 @@
 clc; clearvars; close all;
 
-keyboard
+%keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -14,7 +14,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [4; 2; 2; 0; 0; 0];   % desired final pose
+finalPose   = [5; -2; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.7;                  % mass (kg)
@@ -27,7 +27,7 @@ dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 15;
-numTimeSteps   = 35;         % number of time samples
+numTimeSteps   = 25;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
@@ -106,7 +106,7 @@ run("./utils/checkClosedLoop_MCRollouts.m");
 %     drawnow
 % end
 
-keyboard
+%keyboard
 %% [Optional] Load all the saved files for further analysis
 
 clearvars; %close all;
@@ -132,7 +132,7 @@ plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
 projectionDims_3D = [10 11 12];
 plotOneLevelSet_3D(x_nom, P, projectionDims_3D);
 
-keyboard;
+%keyboard;
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
 order = 3; %order of Taylor expansion
@@ -159,7 +159,7 @@ rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial gue
                                 % keep it greater than 0!
 rhoInitialGuessExpCoeff = 3; %[TUNEABLE] c: decrease value if initial guess fails
 
-%1e-3 and 2
+%1e-3 and 3
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
@@ -168,25 +168,26 @@ catch
     disp('Could not find a successful initial guess to start the alternation scheme!');
 end
 
-return
+%return
 
-%optimize once the feasibility check passes through
+%% optimize once the feasibility check passes through
 close all
+tic
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
-
+toc
 %% [Optional] Plot computed funnels
-close all
+clc; clearvars; close all
 
-projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
+projectionDims_2D = [1 2]; projectionDims_3D = [10 11 12];
 run("./utils/plottingScript.m");
 
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
 
-%startTimeIndex = 1;
-%numSamples = 100;
-
-%run("./utils/empiricallyVerifyInvariance.m");
+% startTimeIndex = 1;
+% numSamples = 100;
+% 
+% run("./utils/empiricallyVerifyInvariance.m");
 
 %% Small debug snippets
 

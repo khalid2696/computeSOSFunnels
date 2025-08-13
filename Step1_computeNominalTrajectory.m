@@ -91,44 +91,44 @@ end
 
 clearvars; %cleanup the workspace after saving relevant data and plotting
 
-%% for debugging purposes
-drawFlag = 0;
-
-load('./precomputedData/nominalTrajectory.mat');
-
-tspan = [time_instances(1), time_instances(end)];
-
-% Solve IVP
-x0 = x_nom(:,1);
-[t_sol, x_sol] = ode15s(@(t,x) ...
-    ode_wrapper(t, x, time_instances, u_nom', dynamicsFnHandle), ...
-    tspan, x0);
-t_sol = t_sol';
-x_sol = x_sol';
-u_sol = interp1(time_instances, u_nom', t_sol, 'linear')';
-
-x_coarse = interp1(t_sol, x_sol', time_instances, 'spline')';
-
-if drawFlag
-    
-    figure; plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
-    figure; plot_flat_outputs(t_sol, x_sol, 2.5);
-
-    % ---- Just for dev and debug -----%
-    figure; plot_Euler_angles(time_instances, x_nom);
-    figure; plot_Euler_angles(t_sol, x_sol);
-
-    figure; plot_linear_velocities(time_instances, x_nom);
-    figure; plot_linear_velocities(t_sol, x_sol);
-
-    figure; plot_angular_velocities(time_instances, x_nom)
-    figure; plot_angular_velocities(t_sol, x_sol);
-
-    figure; plot_input_profiles(time_instances, u_nom);
-    figure; plot_input_profiles(t_sol, u_sol);
-end
-
-[x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_sol);
+% %% for debugging purposes
+% drawFlag = 0;
+% 
+% load('./precomputedData/nominalTrajectory.mat');
+% 
+% tspan = [time_instances(1), time_instances(end)];
+% 
+% % Solve IVP
+% x0 = x_nom(:,1);
+% [t_sol, x_sol] = ode15s(@(t,x) ...
+%     ode_wrapper(t, x, time_instances, u_nom', dynamicsFnHandle), ...
+%     tspan, x0);
+% t_sol = t_sol';
+% x_sol = x_sol';
+% u_sol = interp1(time_instances, u_nom', t_sol, 'linear')';
+% 
+% x_coarse = interp1(t_sol, x_sol', time_instances, 'spline')';
+% 
+% if drawFlag
+% 
+%     figure; plot_flat_outputs(time_instances, x_nom, 2.5); %last argument: scaling for the quadrotor visual
+%     figure; plot_flat_outputs(t_sol, x_sol, 2.5);
+% 
+%     % ---- Just for dev and debug -----%
+%     figure; plot_Euler_angles(time_instances, x_nom);
+%     figure; plot_Euler_angles(t_sol, x_sol);
+% 
+%     figure; plot_linear_velocities(time_instances, x_nom);
+%     figure; plot_linear_velocities(t_sol, x_sol);
+% 
+%     figure; plot_angular_velocities(time_instances, x_nom)
+%     figure; plot_angular_velocities(t_sol, x_sol);
+% 
+%     figure; plot_input_profiles(time_instances, u_nom);
+%     figure; plot_input_profiles(t_sol, u_sol);
+% end
+% 
+% [x_fine, u_fine] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_sol);
 
 %% Local Function definitions
 
