@@ -35,6 +35,26 @@ else
     rho0 = 0.3; %decrease this for a smaller initial set
 end
 
+%finer discretization to prevent integration error build-up
+if ~exist('upsamplingFactor','var')
+    upsamplingFactor = 40;
+end
+
+%% Upsample trajectories and matrices for forward rollouts
+
+Nd = N*upsamplingFactor; % number of interpolated points
+startTimeIndex = (startTimeIndex-1)*upsamplingFactor + 1;
+
+% Fine time vector for interpolation: upsampled spacing
+t_fine = linspace(time_instances(1), time_instances(end), Nd);
+
+[x_nom, u_nom] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
+
+P = upsample_matrix(P, time_instances, t_fine);
+K = upsample_matrix(K, time_instances, t_fine);
+
+time_instances = t_fine;
+
 %% Monte Carlo forward rollouts
 
 % a scaling to vary initial set size based on the time it starts
@@ -92,33 +112,18 @@ disp(' ');
 disp('Plotting trajectories, input profiles, and metrics from MC rollouts..');
 disp(' ');
 
-plot_xtheta_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
-%plot_xyz_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom);
+plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 3]);
 
-plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
-plot_error_metrics(errors, costs, rollout_time_horizon);
+% %plot state trajectories
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [1 2 3]);    %position
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [4 5 6]);    %velocity
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [7 8 9]);    %attitude
+% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [10 11 12]); %body rates
+% 
+% plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
+% plot_error_metrics(errors, costs, rollout_time_horizon);
 
 clearvars;
-
-%% Plot approximate funnel
-
-%1/sqrt(eigenvalue of P_k) gives the length of each semi-axis
-% deviation^T P_k deviation = rho
-% and eigen value of P_k^(-1/2) is 1/sqrt(eigenvalue of P_k)
-% that is why, we take P^(-1/2)
-
-% figure;
-% for i = 1:length(time_instances)    
-%     % a scaling to vary initial set size based on the time it starts
-%     % required because we do systems analysis over a *finite-time* horizon
-%     t0 = time_instances(1); tf = time_instances(end); t_start = time_instances(i);
-%     c = 3; %increase this for narrower initial set
-%     rho = exp(c*(t_start-t0)/(t0-tf));
-% 
-%     %initial_state_covariance = rho*diag([0.25, 0.25, 0.1]);
-%     levelSet = rho*P(:,:,i)^(-1/2);
-%     plot_funnel(x_nom(:,i:end), levelSet)
-% end
 
 %% Function defintions
 
@@ -175,25 +180,65 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
     costToGoal(end) = finalStateDeviation' * P(:, :, end) * finalStateDeviation;
 end
 
+%Interpolates state and control vectors
+function [x_fine, u_fine, t_fine] = upsample_state_control_trajectories(t_coarse, x_coarse, u_coarse, t_fine)
 
-function plot_xtheta_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
-    % Plot all trajectories and nominal trajectory
-    figure; hold on; grid on; %axis equal;
+    % Dimensions
+    Nd = length(t_fine); n = size(x_coarse, 1); m = size(u_coarse, 1);
 
-    projection_dims = [1 3]; %x-theta space
+    % Preallocate outputs
+    x_fine = zeros(n, Nd);
+    u_fine = zeros(m, Nd);
+
+    % Interpolate each row (dimension) of x with cubic spline
+    for i = 1:n
+        x_fine(i, :) = interp1(t_coarse, x_coarse(i, :), t_fine, 'spline'); % Cubic interpolation
+    end
+
+    % Interpolate each row (dimension) of u with linear interpolation
+    for i = 1:m
+        u_fine(i, :) = interp1(t_coarse, u_coarse(i, :), t_fine, 'linear'); % Linear interpolation
+    end
+end
+
+%Interpolates an input matrix
+function M_fine = upsample_matrix(M_coarse, t_coarse, t_fine)
+    % M_coarse: d1 × d2 × N
+    % t_coarse: 1 × N
+    % t_fine  : 1 × Nd (time vector corresponding to upsampling)
     
-    plot(rollout_x_nom(projection_dims(1), :), rollout_x_nom(projection_dims(2), :), 'k--', 'LineWidth', 2);
+    [dim1, dim2, ~] = size(M_coarse); N_fine = length(t_fine);
+    
+    M_fine = zeros(dim1, dim2, N_fine);
+    for i = 1:dim1
+        for j = 1:dim2
+            M_fine(i, j, :) = interp1(t_coarse, squeeze(M_coarse(i, j, :)), t_fine, 'linear');
+        end
+    end
+end
+
+function plot_xy_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom, projectionDims)
+    % Plot all trajectories and nominal trajectory
+    figure; hold on; grid on; axis equal;
+    
+    P = plottingFnsClass();
+
+    if nargin < 5
+        projectionDims = [1 3];
+    end
+ 
+    plot(rollout_x_nom(projectionDims(1), :), rollout_x_nom(projectionDims(2), :), 'k--', 'LineWidth', 2);
 
     for i = 1:length(trajectories)
-        plot(trajectories{i}(projection_dims(1), :), trajectories{i}(projection_dims(2), :), 'b-', 'LineWidth', 0.5);
-        plot(trajectories{i}(projection_dims(1), 1), trajectories{i}(projection_dims(2), 1), 'sg');
+        plot(trajectories{i}(projectionDims(1), :), trajectories{i}(projectionDims(2), :), 'b-', 'LineWidth', 0.5);
+        plot(trajectories{i}(projectionDims(1), 1), trajectories{i}(projectionDims(2), 1), 'sg');
     end
     
-    plot(complete_x_nom(projection_dims(1), :), complete_x_nom(projection_dims(2), :), 'k--', 'LineWidth', 2);
+    plot(complete_x_nom(projectionDims(1), :), complete_x_nom(projectionDims(2), :), 'k--', 'LineWidth', 2);
     
-    %plot an ellipse from which initial states are sampled
-    ellipse_center = [rollout_x_nom(projection_dims(1),1) rollout_x_nom(projection_dims(2),1)]; % 2D center of the ellipsoid
-    cov_2d = project_ellipsoid_matrix(covariance, projection_dims); % Extract 2D covariance
+    %plot initial sampling set
+    ellipse_center = [rollout_x_nom(projectionDims(1),1), rollout_x_nom(projectionDims(2),1)]';
+    cov_2d = P.project_ellipsoid_matrix_2D(covariance, projectionDims); % Extract 2D covariance
     [eig_vec, eig_val] = eig(cov_2d);
     
     theta = linspace(0, 2*pi, 100); % Parameterize ellipse
@@ -203,63 +248,43 @@ function plot_xtheta_trajectories(trajectories, rollout_x_nom, covariance, compl
     rotated_ellipse = eig_vec * ellipse_boundary;
     
     plot(ellipse_center(1) + rotated_ellipse(1, :), ...
-        ellipse_center(2) + rotated_ellipse(2, :), ...
-        'k-.', 'LineWidth', 1.2);
+         ellipse_center(2) + rotated_ellipse(2, :), ...
+         'k-.', 'LineWidth', 1.2);
 
-    xlabel('p_x'); ylabel('\theta');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
     title('Monte Carlo Rollout Trajectories');
     legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
     %hold off;
 end
 
-% function plot_xyz_trajectories(trajectories, rollout_x_nom, covariance, complete_x_nom)
-%     % Plot all trajectories and nominal trajectory
-%     figure; view(3); hold on; grid on; axis equal;
-% 
-%     plot3(rollout_x_nom(1, :), rollout_x_nom(2, :), rollout_x_nom(3, :), 'k--', 'LineWidth', 2);
-% 
-%     for i = 1:length(trajectories)
-%         plot3(trajectories{i}(1, :), trajectories{i}(2, :), trajectories{i}(3, :), 'b-', 'LineWidth', 0.5);
-%         plot3(trajectories{i}(1, 1), trajectories{i}(2, 1), trajectories{i}(3, 1), 'sg');
-%     end
-% 
-%     plot3(complete_x_nom(1, :), complete_x_nom(2, :), complete_x_nom(3, :), 'k--', 'LineWidth', 2);
-% 
-%     % %plot an ellipse from which initial states are sampled
-%     % ellipse_center = rollout_x_nom(1:2,1); % 2D center of the ellipsoid
-%     % cov_2d = covariance(1:2, 1:2); % Extract 2D covariance
-%     % [eig_vec, eig_val] = eig(cov_2d);
-%     % 
-%     % theta = linspace(0, 2*pi, 100); % Parameterize ellipse
-%     % %mu + 3*sigma will cover 99.7% of the distribution
-%     % %std dev, sigma = sqrt(covariance)
-%     % ellipse_boundary = 3*eig_val^(1/2) * [cos(theta); sin(theta)];
-%     % rotated_ellipse = eig_vec * ellipse_boundary;
-%     % 
-%     % plot(ellipse_center(1) + rotated_ellipse(1, :), ...
-%     %      ellipse_center(2) + rotated_ellipse(2, :), ...
-%     %      'k-.', 'LineWidth', 1.2);
-% 
-%     xlabel('p_x'); ylabel('p_y'); zlabel('p_z');
-%     title('Monte Carlo Rollout Trajectories');
-%     legend('Nominal Trajectory','Sample Trajectories','Sample Initial states','Location','best');
-%     %hold off;
-% end
-
-function M_2d = project_ellipsoid_matrix(M, projection_dims)
-    % Input:
-    % M: nxn matrix defining the n-dimensional ellipsoid x^T M x < 1
-    % projection_dims: 2-element vector specifying which dimensions to project onto
-    %                  (e.g., [1 2] for xy-plane, [1 3] for xz-plane)
+function plot_state_trajectories(trajectories, rollout_time_instances, rollout_x_nom, stateDims)
     
-    n = size(M, 1); %get the dimensionality of matrix M
+    if nargin < 4
+        stateDims = [1 2 3];
+    end
 
-    basisMatrix = zeros(n,2);
-    basisMatrix(projection_dims(1),1) = 1;
-    basisMatrix(projection_dims(2),2) = 1;
+    % Plot all trajectories
+    figure; %hold on; grid on; axis equal;
 
-    M_2d = inv(basisMatrix' *inv(M) * basisMatrix);
+    for j = 1:length(stateDims)
+        subplot(length(stateDims), 1, j);
+
+        hold on; grid on;
+
+        for i = 1:length(trajectories)
+            plot(rollout_time_instances, trajectories{i}(stateDims(j), :), 'b-', 'LineWidth', 0.5);
+        end
+    
+        plot(rollout_time_instances, rollout_x_nom(stateDims(j), :), 'k--', 'LineWidth', 2);
+
+        xlabel('time [s]');
+        ylabel(['x_{', num2str(stateDims(j)), '}'])
+    end
+
+    sgtitle('Monte Carlo Rollout Trajectories');
 end
+
 
 function plot_input_profiles(input_profiles, rollout_time_instances, complete_u_nom, complete_time_instances)
     % Plot all trajectories and nominal trajectory

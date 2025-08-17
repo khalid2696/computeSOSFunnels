@@ -83,36 +83,42 @@ startRegionEllipsoidMatrix = (1/startScaling)*P(:,:,1)/rhoInitialGuess(1);
 
 %% Plot guess funnel and start/end regions
 
-%plot(time_instances, rhoInitialGuess);
-%plotFunnel(x_nom, ellipsoidMatrices, ones(size(rhoInitialGuess)));
-
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-title('Initial guess funnel');
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-
-drawnow
-%% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
-
-[~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
-                                                                        startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
-                                                                          multiplierPolyDeg, options, tolerance);
-
-%plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-%plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-%plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-disp(rhoInitialGuess');
-
-if ~infeasibilityStatus
-    title('Initial guess V and rho scaling (feasible)');
-    disp('Feasibility check passed for given rho guess..');
-else
-    title('Initial guess V and rho scaling (infeasible)');
-    error('Could not find a successful initial guess to start the alternation scheme!')
+if drawFlag
+    plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    title('Initial guess funnel');
+    plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+    drawnow;
 end
 
-if strcmp(usageMode, 'feasibilityCheck')
+%% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
+
+if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
+
+    [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
+                                                                            startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
+                                                                              multiplierPolyDeg, options, tolerance);
+    
+    if drawFlag
+        if ~infeasibilityStatus
+            title('Initial guess V and rho scaling (feasible)');
+        else
+            title('Initial guess V and rho scaling (infeasible)');
+        end
+    end
+    disp(rhoInitialGuess');
+    
+    if ~infeasibilityStatus
+        disp('Feasibility check passed for given rho guess..');
+    else
+        error('Could not find a successful initial guess to start the alternation scheme!')
+    end
+    
+    initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
+    initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
+
     return
+
 end
 
 %% Alternation Loop -- proceed if we're able to get a feasible initial guess
@@ -132,18 +138,10 @@ for iter=1:maxIter
  
     if ~infeasibilityStatus
         disp('Feasibility-check step: passed'); disp(' ');
-        
-        %plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        %title('A valid funnel certificate');
     end
 
     if infeasibilityStatus
         if iter == 1
-            %plotFunnel(x_nom, P, currRhoScaling);
-            %plotFinalSet(x_nom(:,1), P(:,:,1)/rho_Start);
-            %title('Scaling of cost-go-matrices (unsuccessful)')
             error('Could not find a successful initial guess to start the alternation scheme!')
         else
             disp('Infeasibility! Exiting the alternation scheme..')
@@ -180,15 +178,17 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
     end
-
+    
+    %%
     if ~infeasibilityStatus
         disp('Optimisation step: passed'); disp(' ');
         
-        plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        
-        title('Optimised funnel certificate');
+        if drawFlag
+            plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling, [1 3]);
+            plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix, [1 3]);
+            plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix, [1 3]);
+            title('Optimised funnel certificate');
+        end   
         
         % display some volumetric properties
         disp('Volume of computed inlet set: '); disp(1/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1))))); disp(' ');
@@ -363,6 +363,9 @@ function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ..
     end
     
     %imposing SOS constraints
+    % 1. Positive definiteness of V at index 1
+    prog = sosineq(prog, candidateVArray{1} - tolerance*(xbar'*xbar));
+
     objective = 0;
     objective = objective + rhoValArray{1}; %include rho corresponding to inlet
     for k = 2:1:N
@@ -484,6 +487,20 @@ end
 
 function M = getEllipsoidMatrix_nD(V_polyFn, n)
     
+    %for some reason, SOSTOOLS orders the monomials in this particular
+    %lexicographic order, 10 12 12 before 2, 21 22 .. before 3, and so on
+    %so using that order to retrieve the coefficients and save it
+    
+    % Convert numbers to strings for lexicographic sorting
+    indices = 1:n;
+    stringIndices = arrayfun(@num2str, indices, 'UniformOutput', false);
+    
+    % Sort strings lexicographically
+    [~, sorted_indices] = sort(stringIndices);
+    indexKeySequence = indices(sorted_indices);
+
+    %indexKeySequence = [1 2 3 4];
+
     M = NaN(n); %empty nxn matrix to hold the ellipsoid matrix
     
     if length(V_polyFn.coefficient) <  n*(n-1)/2
@@ -493,11 +510,12 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     k = 1;
     for i=1:n
         for j=i:n
-            if i == j %diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k));
+            ind1 = indexKeySequence(i); ind2 = indexKeySequence(j); %retrieve the index specific for this decomposition
+            if ind1 == ind2 %diagonal terms
+                M(ind1,ind2) = double(V_polyFn.coefficient(k));
             else      %off-diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k))/2;
-                M(j,i) = double(V_polyFn.coefficient(k))/2;
+                M(ind1,ind2) = double(V_polyFn.coefficient(k))/2;
+                M(ind2,ind1) = double(V_polyFn.coefficient(k))/2;
             end
 
             k = k+1;
@@ -507,31 +525,78 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     M = full(M);
 end
 
-%% Plotting functions
-function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
-    figure; hold on; grid on; %axis equal;
-    
-    projection_dims = [1 3]; %x-theta space
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
 
-    for k=1:1:length(x_nom)
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
+end
+
+%% Plotting functions
+function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling, projectionDims)
+    
+    if nargin < 4
+        projectionDims = [1 3];
+    end
+
+    figure
+    hold on;
+    grid on; 
+    axis equal;
+    
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
-        M_xy = project_ellipsoid_matrix(M, projection_dims);
-        center = [x_nom(projection_dims(1),k), x_nom(projection_dims(2),k)]';
+        M_xy = project_ellipsoid_matrix(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
         plotEllipse(center, M_xy)
     end 
     
     title('Invariant Ellipsoidal Sets along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('\theta');
-    plot(x_nom(projection_dims(1),:),x_nom(projection_dims(2),:),'--b');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
 end
 
-function plotInitialSet(x_initial, initialEllipsoid)
+function plotInitialSet(x_initial, initialEllipsoid, projectionDims)
     
-    M = initialEllipsoid; 
-    projection_dims = [1 3]; %x-theta space
+    if nargin < 3
+        projectionDims = [1 3]; %x-theta space
+    end
 
-    M_xy = project_ellipsoid_matrix(M, projection_dims);
+    M = initialEllipsoid;  
+
+    M_xy = project_ellipsoid_matrix(M, projectionDims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -539,17 +604,21 @@ function plotInitialSet(x_initial, initialEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_initial(projection_dims(1)) + rotated_ellipse(1, :), ...
-         x_initial(projection_dims(2)) + rotated_ellipse(2, :), ...
+    plot(x_initial(projectionDims(1)) + rotated_ellipse(1, :), ...
+         x_initial(projectionDims(2)) + rotated_ellipse(2, :), ...
          '-.g', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 
-function plotFinalSet(x_final, finalEllipsoid)
+function plotFinalSet(x_final, finalEllipsoid, projectionDims)
+
+    if nargin < 3
+        projectionDims = [1 3]; %x-theta space
+    end
 
     M = finalEllipsoid;
-    projection_dims = [1 3]; %x-theta space
+    projectionDims = [1 3]; %x-theta space
 
-    M_xy = project_ellipsoid_matrix(M, projection_dims);
+    M_xy = project_ellipsoid_matrix(M, projectionDims);
 
     [eig_vec, eig_val] = eig(M_xy);
     
@@ -557,8 +626,8 @@ function plotFinalSet(x_final, finalEllipsoid)
     ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
     rotated_ellipse = eig_vec * ellipse_boundary;
     
-    plot(x_final(projection_dims(1)) + rotated_ellipse(1, :), ...
-         x_final(projection_dims(2)) + rotated_ellipse(2, :), ...
+    plot(x_final(projectionDims(1)) + rotated_ellipse(1, :), ...
+         x_final(projectionDims(2)) + rotated_ellipse(2, :), ...
          '-.r', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
 end
 

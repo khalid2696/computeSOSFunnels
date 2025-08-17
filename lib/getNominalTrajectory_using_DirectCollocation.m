@@ -6,13 +6,29 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     controlEffort_weight = 0.01;   % Weight for control effort
     
     % State constraints
-    cartPosition_limits = [-3.0, 3.0];     % Cart position bounds (m)
+    cartPosition_limits = [-5.0, 5.0];     % Cart position bounds (m)
     cartVelocity_limits = [-5.0, 5.0];     % Cart velocity bounds (m/s)
     pendulum_angularVel_limits = [-15, 15]; % Angular velocity bounds (rad/s)
     
     % Input constraints  
-    force_limits = [-20, 20];  % Horizontal force limits (N)
+    force_limits = [-10, 10];  % Horizontal force limits (N)
     
+    %% identify the operation mode
+    initialPendulumAngle = x0(3);
+    finalPendulumAngle = xf(3);
+
+    if initialPendulumAngle == 0 && finalPendulumAngle == 0 %down-balance
+        operationMode = 'downBalance';
+    elseif initialPendulumAngle == pi && finalPendulumAngle == pi
+        operationMode = 'topBalance';
+    elseif initialPendulumAngle == 0 && finalPendulumAngle == pi
+        operationMode = 'swingUp';
+    elseif initialPendulumAngle == pi && finalPendulumAngle == 0
+        operationMode = 'swingDown';
+    else
+        error('Exitting.. Cannot process other intial/final states as of now..')
+    end
+
     %% Define Decision Variables
     T = sdpvar(1);              % Variable time horizon
     dt = T / (N-1);             % Adaptive time step
@@ -51,28 +67,33 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     constraints = [constraints, X(:, end) == xf];
     
     %% State Constraints
+    
+    % Pendulum angle: Mode-specific constraints
+    switch operationMode
+        case 'downBalance'
+            disp('down balance');
+            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 0.1*pi]; %for hanging down position
+        case 'topBalance'
+            disp('up balance');
+            constraints = [constraints, 0.9*pi <= X(3,:), X(3,:) <= 1.1*pi]; %for balancing at the top
+        case {'swingUp', 'swingDown'}
+            disp('swing-up or swing-down');
+            cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
+            force_limits = [-20, 20];  % increasing the force limits to enable swing up
+            %constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi]; %for swing up and swing down
+    end
+    
     % Cart position limits
-    constraints = [constraints, cartPosition_limits(1) <= X(1, :)];
-    constraints = [constraints, X(1, :) <= cartPosition_limits(2)];
+    constraints = [constraints, cartPosition_limits(1) <= X(1, :), X(1, :) <= cartPosition_limits(2)];
     
     % Cart velocity limits  
-    constraints = [constraints, cartVelocity_limits(1) <= X(2, :)];
-    constraints = [constraints, X(2, :) <= cartVelocity_limits(2)];
-    
-    % Pendulum angle: no explicit limits (allow full rotation for swing-up)
-    % But could add: 
-    
-    %constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi]; %for swing up and swing down
-    constraints = [constraints, 0.9*pi <= X(3,:), X(3,:) <= 1.1*pi]; %for balancing at the top
-    %constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 0.1*pi]; %for hanging down position
+    constraints = [constraints, cartVelocity_limits(1) <= X(2, :), X(2, :) <= cartVelocity_limits(2)];
     
     % Angular velocity limits
-    constraints = [constraints, pendulum_angularVel_limits(1) <= X(4, :)];
-    constraints = [constraints, X(4, :) <= pendulum_angularVel_limits(2)];
+    constraints = [constraints, pendulum_angularVel_limits(1) <= X(4, :), X(4, :) <= pendulum_angularVel_limits(2)];
     
     %% Control Input Constraints
-    constraints = [constraints, force_limits(1) <= U];
-    constraints = [constraints, U <= force_limits(2)];
+    constraints = [constraints, force_limits(1) <= U, U <= force_limits(2)];
     
     % Terminal control constraint (balanced upright requires zero force)
     constraints = [constraints, U(end) == 0];

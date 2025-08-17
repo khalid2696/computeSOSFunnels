@@ -64,7 +64,9 @@ disp(' ');
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
-load('./precomputedData/taylorApproxDynamicsSym.mat');
+%load('./precomputedData/taylorApproxDynamicsSym.mat');
+
+load('./precomputedData/taylorApprox_degree3.mat')
 
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
@@ -189,13 +191,13 @@ function taylor_approx = taylor_expansion(f, vars, a, order)
     
     % Iterate over each term in the vector-valued function f
     for i = 1:length(f)
-
+        i
         % Initialize the Taylor expansion for the i-th component
         f_i_taylor = subs(f(i), vars, a); % Zeroth-order term (f(a))
         
         % Add higher-order terms iteratively
         for k = 1:order
-
+            k
             term = 0; % Initialize the term of order k
             
             % Iterate over all multi-index combinations for the current order

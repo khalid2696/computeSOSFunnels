@@ -1,5 +1,6 @@
 clc; clearvars; close all;
 
+keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -13,8 +14,8 @@ addpath('./lib/');
 %% [INPUT] specify initial and final state: [pos, vel, theta, omega]
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
-initialState = [0; 0; pi; 0;];   % initial state: at origin, vertically down
-finalState   = [2; 0; pi; 0;];   % desired final state
+initialState = [0; 0; 0; 0;];   % initial state: at origin, vertically down
+finalState   = [3; 0; 0; 0;];  % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
 %theta constraints accordingly (based on whether it's upright or hanging down)
@@ -31,7 +32,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 10;
+maxTimeHorizon = 25;
 numTimeSteps = 50;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
@@ -42,6 +43,8 @@ disp('- - - - - - -'); disp(" ");
 load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
+
+keyboard;
 
 %% Design a time-varying LQR feedback controller
 
@@ -58,16 +61,37 @@ run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
 
 % for debugging
-%load('./precomputedData/LQRGainsAndCostMatrices.mat');
+load('./precomputedData/LQRGainsAndCostMatrices.mat');
+
+%condition number (kappa) < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+for k=1:1:size(P,3)
+    matrix_condition_number(P(:,:,k))
+end
 
 keyboard;
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
-close all;
+close all; clearvars;
+
 startTimeIndex = 1; %start time for the rollouts
 startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
+upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
+                         
 run("./utils/checkClosedLoop_MCRollouts.m");
+drawnow
+
+% for k = 1:50
+% 
+%     startTimeIndex = k
+%     startMaxPerturbation = 0.05;
+% 
+%     clearvars -except startMaxPerturbation startTimeIndex
+% 
+%     run("./utils/checkClosedLoop_MCRollouts.m");
+%     drawnow
+% end
 
 keyboard
 %% [Optional] Load all the saved files for further analysis
@@ -89,7 +113,7 @@ daspect([1 1 0.5]);
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
-%order = 3; %order of Taylor expansion
+order = 3; %order of Taylor expansion
 run("Step3_getDeviationDynamics.m");
 %Note: comment out lines 109-112 of the above script 
 %      if you don't want to double-check that xbar_dot(0) = 0 at each t = t_k
@@ -100,16 +124,15 @@ disp('- - - - - - -'); disp(" ");
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clearvars; close all; 
 
-%specify SOS program hyperparameters
-maxIter = 1; %maximum number of iterations
+drawFlag = 1;
 
 % Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = -0.05; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = 0; %[TUNEABLE] c: increase value if initial guess fails
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
@@ -118,7 +141,20 @@ catch
     disp('Could not find a successful initial guess to start the alternation scheme!');
 end
 
-%optimize once the feasibility check passes through
+%% optimize once the feasibility check passes through
+drawFlag = 1;
+
+%specify SOS program hyperparameters
+maxIter = 1; %maximum number of iterations
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+rhoInitialGuessConstant = 0.1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+                                % keep it greater than 0!
+rhoInitialGuessExpCoeff = 0.5; %[TUNEABLE] c: increase value if initial guess fails
+
+
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 
@@ -192,6 +228,7 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     ];
 end
 
+% Plotting functions
 function plotOneLevelSet_2D(x_nom, ellipsoidMatrix, projectionDims)
     figure; hold on; grid on; axis equal;
 
@@ -244,4 +281,43 @@ function plotOneLevelSet_3D(x_nom, ellipsoidMatrix, projectionDims)
     xlabel(['x_{', num2str(projectionDims(1)), '}'])
     ylabel(['x_{', num2str(projectionDims(2)), '}'])
     zlabel(['x_{', num2str(projectionDims(3)), '}'])
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+% Input:
+%   A - Input matrix (must be square and non-singular)
+%   norm_type - (optional) Type of norm to use:
+%               '1' or 1 for 1-norm
+%               '2' or 2 for 2-norm (default)
+%               'inf' for infinity-norm
+%               'fro' for Frobenius norm
+%
+% Output:
+%   kappa - Condition number of matrix A
+
+    % Set default norm type if not provided
+    if nargin < 2
+        norm_type = 2;
+    end
+    
+    % Check if matrix is square
+    [m, n] = size(A);
+    if m ~= n
+        disp('Matrix must be square');
+        return
+    end
+    
+    % Check if matrix is singular
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    
+    % Compute condition number using built-in function
+    kappa = cond(A, norm_type);
+    
+    % Alternative manual calculation (commented out):
+    % kappa = norm(A, norm_type) * norm(inv(A), norm_type);
+    
 end
