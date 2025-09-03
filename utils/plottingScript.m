@@ -33,6 +33,7 @@ axis normal %or alternatively daspect([1 0.5]);
 
 if ~exist('projectionDims_3D','var')
     projectionDims_3D = [1 2 3];
+    %return
 end
 
 plotFunnel_3D(x_nom, ellipsoidMatrices, rhoScaling, projectionDims_3D);

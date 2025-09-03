@@ -100,7 +100,7 @@ disp('Plotting trajectories and metrics from MC rollouts..');
 disp(' ');
 
 %Plot the rollout trajectories
-plot_trajectories(trajectories, rollout_x_nom, inletSet, x_nom, projectionDims_2D);
+plot_trajectories(trajectories, rollout_x_nom, x_nom, projectionDims_2D);
 
 %Plot the input profiles
 %plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances)
@@ -196,9 +196,9 @@ function plot_trajectories(trajectories, rollout_x_nom, complete_x_nom, projecti
     if nargin < 4
         projectionDims = [1 2]; %if not specified, by default x-y projection
     end
-
+    
     % Plot all trajectories and nominal trajectory
-    %figure; hold on; grid on; axis equal;
+    figure; hold on; grid on; %axis equal;
     
     plot(rollout_x_nom(projectionDims(1), :), rollout_x_nom(projectionDims(2), :), 'k--', 'LineWidth', 2);
 

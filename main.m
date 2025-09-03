@@ -1,6 +1,6 @@
 clc; clearvars; close all;
 
-keyboard
+%keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -15,7 +15,7 @@ addpath('./lib/');
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
 initialState = [0; 0; 0; 0;];   % initial state: at origin, vertically down
-finalState   = [3; 0; 0; 0;];  % desired final state
+finalState   = [0; 0; pi; 0;];  % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
 %theta constraints accordingly (based on whether it's upright or hanging down)
@@ -32,7 +32,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 25;
+maxTimeHorizon = 10; %10 for swing down
 numTimeSteps = 50;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
@@ -53,9 +53,14 @@ keyboard;
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
-Q = diag([5, 0.1, 10, 0.1]);
-R = 0.1;
+% Q = diag([5, 0.1, 10, 0.1]);
+% R = 0.1;
+% terminalRegionScaling = 1;
+
+Q = 1e-3*diag([100, 0.1, 10, 0.1]);
+R = 10;
 terminalRegionScaling = 1;
+
 
 run("Step2_FeedbackControllerSynthesis.m");
 disp('- - - - - - -'); disp(" ");
@@ -73,10 +78,11 @@ keyboard;
 
 close all; clearvars;
 
+numSamples = 1;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 0.1; %a measure of max initial perturbations to state
+startMaxPerturbation = 1e-6; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+upsamplingFactor = 100; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
                          
 run("./utils/checkClosedLoop_MCRollouts.m");
@@ -130,9 +136,11 @@ drawFlag = 1;
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = 0; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = -3; %[TUNEABLE] c: increase value if initial guess fails
+
+%[0.3, 0.5] %for top balance and down balance
 
 usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
 try                               
@@ -141,6 +149,7 @@ catch
     disp('Could not find a successful initial guess to start the alternation scheme!');
 end
 
+keyboard
 %% optimize once the feasibility check passes through
 drawFlag = 1;
 
@@ -150,10 +159,11 @@ maxIter = 1; %maximum number of iterations
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
 rhoInitialGuessExpCoeff = 0.5; %[TUNEABLE] c: increase value if initial guess fails
 
+%[0.3, 0.5] %for top balance and down balance
 
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
@@ -216,13 +226,13 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     c_theta = cos(theta);
     
     % Common denominator
-    %denom = M + m*(1 - c_theta^2);
-    denom = M + m*s_theta^2;
+    denom = M + m*(1 - c_theta^2);
+    %denom = M + m*s_theta^2;
     
     % State derivatives
     f = [
         v_x;
-        (F + m*L*theta_dot^2*s_theta - m*g*s_theta*c_theta) / denom;
+        (F + m*L*theta_dot^2*s_theta + m*g*s_theta*c_theta) / denom; %changed from - to + in the last term
         theta_dot;
         (-F*c_theta - m*L*theta_dot^2*s_theta*c_theta + (M + m)*g*s_theta) / (L * denom)
     ];

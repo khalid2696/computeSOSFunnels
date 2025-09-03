@@ -12,6 +12,8 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     
     % Input constraints  
     force_limits = [-10, 10];  % Horizontal force limits (N)
+    holdTimeInstances = 0.1*N; %hold at the terminal state for some time instances
+                               %10 percent of the number of time steps
     
     %% identify the operation mode
     initialPendulumAngle = x0(3);
@@ -23,8 +25,15 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         operationMode = 'topBalance';
     elseif initialPendulumAngle == 0 && finalPendulumAngle == pi
         operationMode = 'swingUp';
+
+        %different weight coefficients for the cost function
+        controlEffort_weight = 0.1;   % higher weight for control effort
+        holdTimeInstances = 0.2*N; %20 percent of numTimeSteps
     elseif initialPendulumAngle == pi && finalPendulumAngle == 0
         operationMode = 'swingDown';
+
+        %different weight coefficients for the cost function
+        controlEffort_weight = 1;   % higher weight for control effort
     else
         error('Exitting.. Cannot process other intial/final states as of now..')
     end
@@ -76,11 +85,26 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         case 'topBalance'
             disp('up balance');
             constraints = [constraints, 0.9*pi <= X(3,:), X(3,:) <= 1.1*pi]; %for balancing at the top
-        case {'swingUp', 'swingDown'}
-            disp('swing-up or swing-down');
+        case {'swingUp'}
+            disp('swing-up');
             cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
             force_limits = [-20, 20];  % increasing the force limits to enable swing up
-            %constraints = [constraints, -2*pi <= X(3,:), X(3,:) <= 2*pi]; %for swing up and swing down
+            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= pi]; %for swing up and swing down
+
+            % Hold at the final state for some time instances
+            for k = 1:holdTimeInstances
+                constraints = [constraints, X(:, end-k) == xf];
+            end
+        case {'swingDown'}
+            disp('swing-down');
+            cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
+            force_limits = [-10, 10];  % increasing the force limits to enable swing up
+            constraints = [constraints, -0*pi <= X(3,:), X(3,:) <= 2.1*pi]; %for swing up and swing down
+            
+            % Hold at the final state for some time instances
+            for k = 1:holdTimeInstances
+                constraints = [constraints, X(:, end-k) == xf];
+            end
     end
     
     % Cart position limits
@@ -96,7 +120,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     constraints = [constraints, force_limits(1) <= U, U <= force_limits(2)];
     
     % Terminal control constraint (balanced upright requires zero force)
-    constraints = [constraints, U(end) == 0];
+    %constraints = [constraints, U(end) == 0];
     
     %% Additional Path Constraints (Optional)
     % Smooth control - penalize control rate changes

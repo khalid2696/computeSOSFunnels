@@ -25,8 +25,8 @@ if ~exist('startTimeIndex','var')
     startTimeIndex = 1;
 end
 
-if ~exist('num_samples','var')
-    num_samples = 500; %default number of rollouts
+if ~exist('numSamples','var')
+    numSamples = 500; %default number of rollouts
 end
 
 if exist('startMaxPerturbation','var')
@@ -40,6 +40,7 @@ if ~exist('upsamplingFactor','var')
     upsamplingFactor = 40;
 end
 
+numSamples
 %% Upsample trajectories and matrices for forward rollouts
 
 Nd = N*upsamplingFactor; % number of interpolated points
@@ -72,6 +73,7 @@ if ~exist('initial_state_covariance', 'var')
     %hence divided by 3
 end
 
+initial_state_covariance
 %1/sqrt(eigenvalue of P_k) gives the length of each semi-axis
 % deviation^T P_k deviation = rho
 % and eigen value of P_k^(-1/2) is 1/sqrt(eigenvalue of P_k)
@@ -86,19 +88,20 @@ rollout_P     = P(:,:,startTimeIndex:end);
 %sample initial states at random
 mean_intial_state = rollout_x_nom(:,1); %centered around the nominal trajectory
 
-initial_states = sample_initial_states(mean_intial_state, initial_state_covariance, num_samples);
+initial_states = sample_initial_states(mean_intial_state, initial_state_covariance, numSamples);
 
-trajectories = cell(num_samples, 1);
-input_profiles = cell(num_samples, 1);
+trajectories = cell(numSamples, 1);
+input_profiles = cell(numSamples, 1);
 
-errors = zeros(num_samples, length(rollout_time_horizon));
-costs = zeros(num_samples, length(rollout_time_horizon));
+errors = zeros(numSamples, length(rollout_time_horizon));
+costs = zeros(numSamples, length(rollout_time_horizon));
 
-for i = 1:num_samples
+for i = 1:numSamples
     x0 = initial_states(:, i);
-    %options: Euler, trapezoidal, RK4, (inbuilt) ode45
+    %options: Euler, trapezoidal, RK4, (inbuilt) ode15s
     [x_traj, total_input, error, cost] = ...
-        forward_propagate(dynamicsFnHandle, x0, rollout_x_nom, rollout_u_nom, rollout_K, rollout_P, rollout_time_horizon, Ts,'RK4');
+        forward_propagate(dynamicsFnHandle, x0, rollout_x_nom, rollout_u_nom, ...
+                            rollout_K, rollout_P, rollout_time_horizon, Ts, 'rk4');
     trajectories{i} = x_traj;
     input_profiles{i} = total_input;
     errors(i, :) = error;
@@ -113,6 +116,9 @@ disp('Plotting trajectories, input profiles, and metrics from MC rollouts..');
 disp(' ');
 
 plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 3]);
+plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [2 4]);
+plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 2]);
+plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [3 4]);
 
 % %plot state trajectories
 % plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [1 2 3]);    %position
@@ -162,10 +168,13 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
             k3 = dynamics(x_traj(:, k) + 0.5 * dt * k2, u_k);
             k4 = dynamics(x_traj(:, k) + dt * k3, u_k);
             x_traj(:, k+1) = x_traj(:, k) + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
-        else %just use the in-built ode45 (slower but accurate)
+        else %just use the in-built ode15s (slower but accurate)
             [~, x_next] = ode45(@(t, x) dynamics(x, u_k), [0, dt], x_traj(:, k));
             x_traj(:, k+1) = x_next(end, :)';
         end
+
+        %x_traj(3,k+1) = wrapTo2Pi(x_traj(3,k+1)); %wrap angle to 2pi
+        x_traj(3,k+1) = wrapToPi(x_traj(3,k+1)); %wrap angle to -pi, pi
     
         % Compute error and cost metrics
         stateDeviation = x_traj(:, k) - x_nom(:, k);

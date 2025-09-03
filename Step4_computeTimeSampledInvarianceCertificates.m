@@ -32,7 +32,7 @@ n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
 % 1. Parameters pertaining to SOS Programming
 options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
                           %options -- mosek/sedumi
-multiplierPolyDeg = 2; %polynomial multiplier of predefined degree
+multiplierPolyDeg = 6; %polynomial multiplier of predefined degree
 LyapunovFnDeg = 2;     %quadratic Lyapunov function
 tolerance = 1e-6;
 convergenceTolerance = 1e-2; %if less than 1 percent change
@@ -188,6 +188,7 @@ for iter=1:maxIter
             plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix, [1 3]);
             plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix, [1 3]);
             title('Optimised funnel certificate');
+            drawnow;
         end   
         
         % display some volumetric properties

@@ -20,7 +20,7 @@ load('./precomputedData/nominalTrajectory.mat');
 
 %finer discretization to prevent integration error build-up
 if ~exist('upsamplingFactor','var')
-    upsamplingFactor = 10;
+    upsamplingFactor = 100;
 end
 
 % Cost matrices
@@ -77,7 +77,7 @@ toc
 %% Compute time-sampled TVLQR Gains using discrete-time formulation and recursion
 
 % %% Interpolate state and input trajectory for a finer discretisation, so that integration errors don't build up
-%
+% 
 % % Number of interpolated points
 % Nd = N*upsamplingFactor;
 % 
@@ -97,11 +97,10 @@ toc
 % 
 % K_disc = downsample_matrix(K_fine, t_fine, time_instances);
 % P_disc = downsample_matrix(P_fine, t_fine, time_instances);
-% 
-% %% Compare the two methods
-% 
+
+%% Compare the two methods
+
 % compare_matrices(K_disc, P_disc, K_cont, P_cont, Ts)
-% 
 
 %% Observation:
 %continuous time implementation seems to be more versatile and robust
@@ -112,6 +111,15 @@ toc
 %% Choose the matrices computed from one of the two methods
 K = K_cont;
 P = P_cont;
+
+%K = K_disc;
+%P = P_disc;
+
+%K = zeros(nu,nx,N);
+%K = 0.01*K;
+
+%temp = 20;
+%K(:,:,1:end-temp) = zeros(nu,nx,N-temp);
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');

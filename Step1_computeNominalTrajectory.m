@@ -69,8 +69,8 @@ if drawFlag
 
     animate_cartpole_trajectory(time_instances, x_nom, cartPoleParameters);
 
-    plotPolePosition(x_nom, cartPoleParameters);
-    title('Cartpole Trajectory');
+    %plotPolePosition(x_nom, cartPoleParameters);
+    %title('Cartpole Trajectory');
 
     plotStateInputTrajectories(time_instances, x_nom, u_nom);
     sgtitle(sprintf('Cartpole Swing-Up Trajectory (T_f = %.2f s)', time_instances(end)));
