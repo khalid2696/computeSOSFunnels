@@ -54,7 +54,7 @@ function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Pf, dt, metho
         B_interp = @(t) interp1(tspan, permute(B_all, [3 1 2]), t, 'linear', 'extrap');
 
         P0_vec = reshape(Pf, [], 1);
-        opts = odeset('RelTol',1e-8,'AbsTol',1e-10);
+        opts = odeset('RelTol',1e-10,'AbsTol',1e-12);
         [T_sol, P_vec_sol] = ode15s(@(t, Pvec) dre_rhs(t, Pvec, A_interp, B_interp, Q, R, nx), [tf 0], P0_vec, opts);
 
         % Interpolate solution back to N steps

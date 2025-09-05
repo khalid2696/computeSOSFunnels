@@ -1,6 +1,6 @@
 clc; clearvars; close all;
 
-%keyboard
+keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -33,7 +33,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 10; %10 for swing down
-numTimeSteps = 50;         % number of time samples
+numTimeSteps = 500;         % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
@@ -46,20 +46,24 @@ x_nom(:,end)'
 
 keyboard;
 
+%% for debugging purposes
+run('./utils/checkOpenLoop_IVP.m');
+
 %% Design a time-varying LQR feedback controller
 
+close all
 %upsamplingFactor = 20; %finer discretization to prevent integration error build-up
                         %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
-% Q = diag([5, 0.1, 10, 0.1]);
-% R = 0.1;
-% terminalRegionScaling = 1;
-
-Q = 1e-3*diag([100, 0.1, 10, 0.1]);
-R = 10;
+Q = diag([5, 0.1, 10, 0.1]);
+R = 0.1;
 terminalRegionScaling = 1;
+
+% Q = 1e-2*diag([5, 0.1, 10, 0.1]);
+% R = 1000;
+% terminalRegionScaling = 1;
 
 
 run("Step2_FeedbackControllerSynthesis.m");
@@ -80,9 +84,9 @@ close all; clearvars;
 
 numSamples = 1;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1e-6; %a measure of max initial perturbations to state
+startMaxPerturbation = 0; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-upsamplingFactor = 100; %finer discretization to prevent integration error build-up
+upsamplingFactor = 20; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
                          
 run("./utils/checkClosedLoop_MCRollouts.m");
@@ -119,6 +123,8 @@ daspect([1 1 0.5]);
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
+clearvars
+
 order = 3; %order of Taylor expansion
 run("Step3_getDeviationDynamics.m");
 %Note: comment out lines 109-112 of the above script 
@@ -136,9 +142,9 @@ drawFlag = 1;
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.01; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 0.1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = -3; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = 0; %[TUNEABLE] c: increase value if initial guess fails
 
 %[0.3, 0.5] %for top balance and down balance
 
@@ -159,11 +165,12 @@ maxIter = 1; %maximum number of iterations
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
-                                % keep it greater than 0!
-rhoInitialGuessExpCoeff = 0.5; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessConstant = 0.2; % [TUNEABLE] rho_0: decrease value if initial guess fails, 
+                               % keep it greater than 0!
+rhoInitialGuessExpCoeff = 0.5; % [TUNEABLE] c: increase value if initial guess fails
 
-%[0.3, 0.5] %for top balance and down balance
+%[0.2, 0.5] %for top balance
+%[0.3, 0.5] %and down balance
 
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
@@ -216,7 +223,7 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     p_x = x(1);
     v_x = x(2);
     theta = x(3);
-    theta_dot = x(4);
+    omega = x(4);
     
     % Control input
     F = u;
@@ -226,15 +233,15 @@ function f = cartpole_dynamics(x, u, cartPoleParameters)
     c_theta = cos(theta);
     
     % Common denominator
-    denom = M + m*(1 - c_theta^2);
-    %denom = M + m*s_theta^2;
+    %denom = M + m*(1 - c_theta^2);
+    denom = M + m*s_theta^2;
     
     % State derivatives
     f = [
         v_x;
-        (F + m*L*theta_dot^2*s_theta + m*g*s_theta*c_theta) / denom; %changed from - to + in the last term
-        theta_dot;
-        (-F*c_theta - m*L*theta_dot^2*s_theta*c_theta + (M + m)*g*s_theta) / (L * denom)
+        (F + m*L*omega^2*s_theta + m*g*s_theta*c_theta) / denom;
+        omega;
+        (-F*c_theta - m*L*omega^2*s_theta*c_theta - (M + m)*g*s_theta) / (L * denom)
     ];
 end
 

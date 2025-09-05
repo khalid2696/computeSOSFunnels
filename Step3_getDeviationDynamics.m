@@ -61,6 +61,8 @@ disp(' ');
 % this symbolic expression will be in terms of vars and expansion point_a
 %INDEPENDENT of the hyper-parameters used in traj optimisation or feedback controller synthesis 
 %DEPENDENT only on system dynamics f, and the parameters in the mathematical equations of f.
+%so, if you modify the physical parameters of the system, you'll have to
+%redo the above taylor approximation computation
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
@@ -74,8 +76,6 @@ load('./precomputedData/taylorApprox_degree3.mat')
 %rand_timeInstance = randi(N);
 %nom_state = x_nom(:, rand_timeInstance);
 %nom_input = u_nom(:, rand_timeInstance);
-
-load('./precomputedData/taylorApproxDynamicsSym.mat');
 
 disp('Computing polynomial system dynamics at each nominal state-input pair');
 disp(' ');
@@ -181,7 +181,6 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     %clean-up the small terms less than the tolerance
     tolerance = 1e-6;
     deviation_dynamics = cleanpoly(deviation_dynamics, tolerance);
-
 end
 
 function taylor_approx = taylor_expansion(f, vars, a, order)

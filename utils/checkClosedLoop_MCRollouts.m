@@ -26,7 +26,7 @@ if ~exist('startTimeIndex','var')
 end
 
 if ~exist('numSamples','var')
-    numSamples = 500; %default number of rollouts
+    numSamples = 100; %default number of rollouts
 end
 
 if exist('startMaxPerturbation','var')
@@ -40,7 +40,6 @@ if ~exist('upsamplingFactor','var')
     upsamplingFactor = 40;
 end
 
-numSamples
 %% Upsample trajectories and matrices for forward rollouts
 
 Nd = N*upsamplingFactor; % number of interpolated points
@@ -73,7 +72,6 @@ if ~exist('initial_state_covariance', 'var')
     %hence divided by 3
 end
 
-initial_state_covariance
 %1/sqrt(eigenvalue of P_k) gives the length of each semi-axis
 % deviation^T P_k deviation = rho
 % and eigen value of P_k^(-1/2) is 1/sqrt(eigenvalue of P_k)
@@ -126,7 +124,8 @@ plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_no
 % plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [7 8 9]);    %attitude
 % plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [10 11 12]); %body rates
 % 
-% plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
+
+plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
 % plot_error_metrics(errors, costs, rollout_time_horizon);
 
 clearvars;
@@ -139,6 +138,10 @@ function initial_states = sample_initial_states(mean_state, covariance, num_samp
 end
 
 function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynamics, x0, x_nom, u_nom, K, P, time, dt, method)
+    
+    %actuator saturation
+    force_limits = [-15, 15];
+
     % Simulates the unicycle dynamics under TVLQR control
     x_traj = zeros(size(x_nom));
     x_traj(:, 1) = x0;
@@ -149,7 +152,8 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
     
     for k = 1:length(time)-1
         u_k = u_nom(:, k) - K(:, :, k) * (x_traj(:, k) - x_nom(:, k));
-        
+        u_k = min(max(u_k, force_limits(1)), force_limits(2));
+
         % Propagate dynamics
         if strcmpi(method,'Euler')
             %Simpler Euler integration -- for speed
@@ -163,6 +167,7 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
             x_traj(:, k+1) = x_traj(:, k) + (dt / 2) * (dx1 + dx2);   % Trapezoidal integration
         elseif strcmpi(method,'RK4')
             %RK4 integration
+            %disp('RK4');
             k1 = dynamics(x_traj(:, k), u_k); 
             k2 = dynamics(x_traj(:, k) + 0.5 * dt * k1, u_k);
             k3 = dynamics(x_traj(:, k) + 0.5 * dt * k2, u_k);
@@ -174,7 +179,7 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
         end
 
         %x_traj(3,k+1) = wrapTo2Pi(x_traj(3,k+1)); %wrap angle to 2pi
-        x_traj(3,k+1) = wrapToPi(x_traj(3,k+1)); %wrap angle to -pi, pi
+        %x_traj(3,k+1) = wrapToPi(x_traj(3,k+1)); %wrap angle to -pi, pi
     
         % Compute error and cost metrics
         stateDeviation = x_traj(:, k) - x_nom(:, k);

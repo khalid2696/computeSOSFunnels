@@ -8,7 +8,9 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     % State constraints
     cartPosition_limits = [-5.0, 5.0];     % Cart position bounds (m)
     cartVelocity_limits = [-5.0, 5.0];     % Cart velocity bounds (m/s)
-    pendulum_angularVel_limits = [-15, 15]; % Angular velocity bounds (rad/s)
+    pendulum_angularVel_limits = [-9, 9]; % Angular velocity bounds (rad/s)
+                                          % sqrt(4*g/L)
+                                          % previously [-15 15]
     
     % Input constraints  
     force_limits = [-10, 10];  % Horizontal force limits (N)
@@ -21,19 +23,26 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
 
     if initialPendulumAngle == 0 && finalPendulumAngle == 0 %down-balance
         operationMode = 'downBalance';
+        holdTimeInstances = 0;
+
     elseif initialPendulumAngle == pi && finalPendulumAngle == pi
         operationMode = 'topBalance';
+        holdTimeInstances = 0;
+
     elseif initialPendulumAngle == 0 && finalPendulumAngle == pi
         operationMode = 'swingUp';
 
         %different weight coefficients for the cost function
         controlEffort_weight = 0.1;   % higher weight for control effort
-        holdTimeInstances = 0.2*N; %20 percent of numTimeSteps
+        %holdTimeInstances = 0.2*N;    % 20 percent of numTimeSteps
+        holdTimeInstances = 0*N;
     elseif initialPendulumAngle == pi && finalPendulumAngle == 0
         operationMode = 'swingDown';
 
         %different weight coefficients for the cost function
         controlEffort_weight = 1;   % higher weight for control effort
+        %holdTimeInstances = 0.1*N;
+        holdTimeInstances = 0*N;
     else
         error('Exitting.. Cannot process other intial/final states as of now..')
     end
@@ -60,12 +69,23 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         xk = X(:, k);
         uk = U(k);
         
-        % Compute nonlinear dynamics at current and next points
-        f_k = cartpole_dynamics(xk, uk);
-        f_k_next = cartpole_dynamics(X(:, k+1), U(k));
-        
-        % Trapezoidal integration with variable time step
-        x_next = xk + (dt/2) * (f_k + f_k_next);
+        % Compute nonlinear dynamics
+
+        %Euler integration
+        %f_k = quadrotor_dynamics(xk, uk);
+        %x_next = xk + dt*f_k;
+
+        %Trapezoidal integration
+        % f_k = cartpole_dynamics(xk, uk);
+        % f_k_next = cartpole_dynamics(X(:, k+1), U(k));
+        % x_next = xk + (dt/2) * (f_k + f_k_next);
+
+        %RK4 integration
+        k1 = cartpole_dynamics(xk, uk);
+        k2 = cartpole_dynamics(xk + 0.5 * dt * k1, uk);
+        k3 = cartpole_dynamics(xk + 0.5 * dt * k2, uk);
+        k4 = cartpole_dynamics(xk + dt * k3, uk);
+        x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
         
         constraints = [constraints, X(:, k+1) == x_next];
     end
@@ -88,7 +108,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         case {'swingUp'}
             disp('swing-up');
             cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
-            force_limits = [-20, 20];  % increasing the force limits to enable swing up
+            force_limits = [-15, 15];  % increasing the force limits to enable swing up
             constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= pi]; %for swing up and swing down
 
             % Hold at the final state for some time instances
@@ -98,8 +118,8 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         case {'swingDown'}
             disp('swing-down');
             cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
-            force_limits = [-10, 10];  % increasing the force limits to enable swing up
-            constraints = [constraints, -0*pi <= X(3,:), X(3,:) <= 2.1*pi]; %for swing up and swing down
+            force_limits = [-15, 15];  % increasing the force limits to enable swing up
+            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 1*pi]; %for swing up and swing down
             
             % Hold at the final state for some time instances
             for k = 1:holdTimeInstances

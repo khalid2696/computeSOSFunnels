@@ -115,7 +115,7 @@ P = P_cont;
 %K = K_disc;
 %P = P_disc;
 
-%K = zeros(nu,nx,N);
+K = zeros(nu,nx,N);
 %K = 0.01*K;
 
 %temp = 20;
