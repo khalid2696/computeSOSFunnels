@@ -1,6 +1,6 @@
 clc; clearvars; close all;
 
-keyboard
+%keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -32,8 +32,8 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
-maxTimeHorizon = 10; %10 for swing down
-numTimeSteps = 500;         % number of time samples
+maxTimeHorizon = 20; %10 for swing down
+numTimeSteps = 100;  % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
@@ -44,10 +44,10 @@ load('./precomputedData/nominalTrajectory.mat');
 x_nom(:,1)'
 x_nom(:,end)'
 
-keyboard;
-
 %% for debugging purposes
 run('./utils/checkOpenLoop_IVP.m');
+
+keyboard;
 
 %% Design a time-varying LQR feedback controller
 
@@ -58,7 +58,8 @@ close all
 %Cost matrices
 % State order: [px; vx; theta; omega]
 Q = diag([5, 0.1, 10, 0.1]);
-R = 0.1;
+R = 50; %0.1
+%P_f = Q;
 terminalRegionScaling = 1;
 
 % Q = 1e-2*diag([5, 0.1, 10, 0.1]);

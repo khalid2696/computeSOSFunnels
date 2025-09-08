@@ -1,5 +1,5 @@
 %clc; clearvars; close all
-%yalmip('clear');
+yalmip('clear');
 
 disp('Hang on..');
 disp('Computing nominal trajectory using direct collocation trajectory optimisation');
@@ -33,7 +33,7 @@ else
 end
 
 if ~exist('drawFlag','var')
-    drawFlag = 1; %by default do not plot
+    drawFlag = 0; %by default do not plot
 end
 
 %% Nominal trajectory and nominal/open-loop control input (feedforward term)
@@ -58,7 +58,7 @@ if diagnostics.problem ~= 0 %if the optimisation fails, relax the time-horizon a
 end
 
 %% save the nominal trajectory and feedforward input
-save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'dynamicsFnHandle', 'cartPoleParameters');
+save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'nom_trajCost', 'dynamicsFnHandle', 'cartPoleParameters');
 
 disp('Saved the nominal trajectory and nominal inputs to a file!');
 disp(' ');

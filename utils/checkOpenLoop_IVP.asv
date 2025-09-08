@@ -20,29 +20,18 @@ if ~exist('statePerturbation','var')
     statePerturbation = 0;
 end
 
-% Initial condition
-x0 = x_nom(:,1) + statePerturbation;
-xf = x_nom(:,end);
-
-
-%LQR gain for stabilising at top
-K = [-0.3162   -0.9723   25.4223    5.5127];
-
-% for k = 1:N
-% 
-%     xk = x_nom(:,k);
-% 
-%     if k > 0.9*N %hold maneuver
-%         u_nom(k) = K*(xf - xk);
-%     end
-% end
-
 % Linear interpolation of inputs
 u_func = @(t) interp1(time_instances, u_nom, t, 'linear', 'extrap');
 
 %system dynamics
 %dynamicsFnHandle is of the form @(x,u) cartpole_dynamics(x,u,cartPoleParameters);
 cartpole_dynamics_odeFn = @(t,x) dynamicsFnHandle(x, u_func(t));
+
+% Initial condition
+x0 = x_nom(:,1) + statePerturbation;
+xf = x_nom(:,end);
+
+
 
 % Time span
 tspan = [time_instances(1), time_instances(end)];
@@ -59,26 +48,28 @@ x_sol = NaN(size(x_nom));
 x_sol(:,1) = x0;
 cartpole_dynamics = dynamicsFnHandle;
 
+%LQR gain for stabilising at top
+K = 0.005*[-7.0711   -7.4274   48.3647   10.5019];
 for k = 1:N-1
 
     xk = x_sol(:,k);
     uk = u_nom(k);
 
-    % if k > 0.95*N %hold maneuver
-    %     uk = K*(xf - xk);
-    % end
+    if k > 0.8*N %hold maneuver
+        uk = K*(xf - xk);
+    end
 
-    % %trapezoidal
-    % f_k = cartpole_dynamics(xk, uk);
-    % f_k_next = cartpole_dynamics(xk + f_k*dt, uk);
-    % x_next = xk + (dt/2) * (f_k + f_k_next);
+    %trapezoidal
+    f_k = cartpole_dynamics(xk, uk);
+    f_k_next = cartpole_dynamics(xk + f_k*dt, uk);
+    x_next = xk + (dt/2) * (f_k + f_k_next);
 
-    %RK4 integration    
-    k1 = cartpole_dynamics(xk, uk);
-    k2 = cartpole_dynamics(xk + 0.5 * dt * k1, uk);
-    k3 = cartpole_dynamics(xk + 0.5 * dt * k2, uk);
-    k4 = cartpole_dynamics(xk + dt * k3, uk);
-    x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
+    % %RK4 integration    
+    % k1 = cartpole_dynamics(xk, uk);
+    % k2 = cartpole_dynamics(xk + 0.5 * dt * k1, uk);
+    % k3 = cartpole_dynamics(xk + 0.5 * dt * k2, uk);
+    % k4 = cartpole_dynamics(xk + dt * k3, uk);
+    % x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
 
     x_sol(:,k+1) = x_next;
 end
