@@ -20,8 +20,14 @@ if ~exist('statePerturbation','var')
     statePerturbation = 0;
 end
 
+startTimeOffset = 49;
+x_nom = x_nom(:,end-startTimeOffset:end);
+u_nom = u_nom(:,end-startTimeOffset:end);
+time_instances = time_instances(end-startTimeOffset:end);
+
 % Initial condition
-x0 = x_nom(:,1) + statePerturbation;
+statePerturbation = 0;
+x0 = x_nom(:,1) + statePerturbation*ones(size(x_nom,1),1);
 xf = x_nom(:,end);
 
 
@@ -59,7 +65,7 @@ x_sol = NaN(size(x_nom));
 x_sol(:,1) = x0;
 cartpole_dynamics = dynamicsFnHandle;
 
-for k = 1:N-1
+for k = 1:length(time_instances)-1
 
     xk = x_sol(:,k);
     uk = u_nom(k);
@@ -86,7 +92,7 @@ end
 controlLaw = NaN(size(u_nom));
 k_s = 2;
 
-for k = 1:N
+for k = 1:length(time_instances)
     thisTheta = x_nom(3,k);
     thisOmega = x_nom(4,k);
 

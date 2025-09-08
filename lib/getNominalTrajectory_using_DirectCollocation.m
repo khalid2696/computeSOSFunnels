@@ -37,7 +37,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         %different weight coefficients for the cost function
         controlEffort_weight = 0.1; %0.1 % higher weight for control effort
         %holdTimeInstances = 0.2*N;    % 20 percent of numTimeSteps
-        holdTimeInstances = 0.0*N;
+        holdTimeInstances = 0.1*N;
     elseif initialPendulumAngle == pi && finalPendulumAngle == 0
         operationMode = 'swingDown';
 

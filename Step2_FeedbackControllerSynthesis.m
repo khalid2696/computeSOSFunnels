@@ -69,7 +69,7 @@ if ~exist('P_f','var')
     %P_f = Q*terminalRegionScaling;
 end
 
-keyboard
+%keyboard
 %% Compute time-sampled TVLQR Gains using continuous-time formulation and equations
 tic
 Ts = (time_instances(end)-time_instances(1))/(length(time_instances)-1);
@@ -164,7 +164,7 @@ function [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom_f, u_nom
     A_f = double(subs(A_symb, [x; u], [x_nom_f; u_nom_f]));
     B_f = double(subs(B_symb, [x; u], [x_nom_f; u_nom_f]));
     
-    [K_f,S_f,CLP] = lqr(A_f,B_f,Q,R)
+    [K_f,S_f,CLP] = lqr(A_f,B_f,Q,R);
 end
 
 %Interpolates state and control vectors

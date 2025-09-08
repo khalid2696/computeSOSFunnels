@@ -33,7 +33,7 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 20; %10 for swing down
-numTimeSteps = 100;  % number of time samples
+numTimeSteps = 50;  % number of time samples
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
@@ -57,14 +57,14 @@ close all
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
-Q = diag([5, 0.1, 10, 0.1]);
-R = 50; %0.1
-%P_f = Q;
-terminalRegionScaling = 1;
-
-% Q = 1e-2*diag([5, 0.1, 10, 0.1]);
-% R = 1000;
+% Q = diag([5, 0.1, 10, 0.1]);
+% R = 50; %0.1
+% %P_f = Q;
 % terminalRegionScaling = 1;
+
+Q = 1e-2*diag([5, 0.1, 10, 0.1]);
+R = 10;
+terminalRegionScaling = 1;
 
 
 run("Step2_FeedbackControllerSynthesis.m");
@@ -85,9 +85,9 @@ close all; clearvars;
 
 numSamples = 1;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 0; %a measure of max initial perturbations to state
+startMaxPerturbation = 1e-4; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-upsamplingFactor = 20; %finer discretization to prevent integration error build-up
+upsamplingFactor = 1; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
                          
 run("./utils/checkClosedLoop_MCRollouts.m");
@@ -143,9 +143,9 @@ drawFlag = 1;
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.1; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+rhoInitialGuessConstant = 1e-5; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
-rhoInitialGuessExpCoeff = 0; %[TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = -2; %[TUNEABLE] c: increase value if initial guess fails
 
 %[0.3, 0.5] %for top balance and down balance
 

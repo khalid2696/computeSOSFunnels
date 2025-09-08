@@ -99,7 +99,7 @@ for i = 1:numSamples
     %options: Euler, trapezoidal, RK4, (inbuilt) ode15s
     [x_traj, total_input, error, cost] = ...
         forward_propagate(dynamicsFnHandle, x0, rollout_x_nom, rollout_u_nom, ...
-                            rollout_K, rollout_P, rollout_time_horizon, Ts, 'rk4');
+                            rollout_K, rollout_P, rollout_time_horizon, Ts, 'RK4');
     trajectories{i} = x_traj;
     input_profiles{i} = total_input;
     errors(i, :) = error;
