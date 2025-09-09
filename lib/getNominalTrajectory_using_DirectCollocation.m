@@ -2,7 +2,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N)
 
     %% Optimization parameters - cost function and state/input constraints
-    timeHorizon_weight = 0.25; %0.25, 0.5, 1     % Weight for minimizing time
+    timeHorizon_weight = 0; %0.25, 0.5, 1     % Weight for minimizing time
     controlEffort_weight = 0.01;   % Weight for control effort
     controlSmoothnessWeight = 10;  %10    % NEW: Penalize control derivatives
     stateSmoothnessWeight = 10;    %10    % NEW: Penalize state derivatives
@@ -24,10 +24,12 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     finalPendulumAngle = xf(3);
 
     if initialPendulumAngle == 0 && finalPendulumAngle == 0 %down-balance
+    %if finalPendulumAngle == 0 %down-balance    
         operationMode = 'downBalance';
         holdTimeInstances = 0;
 
     elseif initialPendulumAngle == pi && finalPendulumAngle == pi
+    %elseif finalPendulumAngle == pi    
         operationMode = 'topBalance';
         holdTimeInstances = 0;
 
@@ -37,7 +39,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         %different weight coefficients for the cost function
         controlEffort_weight = 0.1; %0.1 % higher weight for control effort
         %holdTimeInstances = 0.2*N;    % 20 percent of numTimeSteps
-        holdTimeInstances = 0.1*N;
+        holdTimeInstances = 0*N; 
     elseif initialPendulumAngle == pi && finalPendulumAngle == 0
         operationMode = 'swingDown';
 
@@ -46,7 +48,11 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         %holdTimeInstances = 0.1*N;
         holdTimeInstances = 0*N;
     else
-        error('Exitting.. Cannot process other intial/final states as of now..')
+        %error('Exitting.. Cannot process other intial/final states as of now..')
+        
+        operationMode = 'stabilize';
+        holdTimeInstances = 0;
+        timeHorizon_weight = 1;
     end
 
     disp('Done with figuring out the mode.');
@@ -127,15 +133,15 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     switch operationMode
         case 'downBalance'
             disp('down balance');
-            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 0.1*pi]; %for hanging down position
+            constraints = [constraints, -0.2*pi <= X(3,:), X(3,:) <= 0.2*pi]; %for hanging down position
         case 'topBalance'
             disp('up balance');
-            constraints = [constraints, 0.9*pi <= X(3,:), X(3,:) <= 1.1*pi]; %for balancing at the top
+            constraints = [constraints, 0.8*pi <= X(3,:), X(3,:) <= 1.2*pi]; %for balancing at the top
         case {'swingUp'}
             disp('swing-up');
             cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
             force_limits = [-12, 12];  % increasing the force limits to enable swing up
-            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= pi]; %for swing up and swing down
+            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 1.01*pi]; %for swing up and swing down
 
             % Hold at the final state for some time instances
             for k = 1:holdTimeInstances
@@ -145,12 +151,14 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
             disp('swing-down');
             cartPosition_limits = [-3.0, 3.0]; %decreasing the position limits to keep the cart near the center
             force_limits = [-15, 15];  % increasing the force limits to enable swing up
-            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 1*pi]; %for swing up and swing down
+            constraints = [constraints, -0.1*pi <= X(3,:), X(3,:) <= 1.01*pi]; %for swing up and swing down
             
             % Hold at the final state for some time instances
             for k = 1:holdTimeInstances
                 constraints = [constraints, X(:, end-k) == xf];
             end
+        otherwise
+            disp('stabilize');
     end
     
     % Cart position limits

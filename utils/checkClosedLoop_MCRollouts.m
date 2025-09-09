@@ -113,17 +113,11 @@ disp(' ');
 disp('Plotting trajectories, input profiles, and metrics from MC rollouts..');
 disp(' ');
 
+%plot state trajectories
 plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 3]);
-plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [2 4]);
-plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 2]);
-plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [3 4]);
-
-% %plot state trajectories
-% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [1 2 3]);    %position
-% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [4 5 6]);    %velocity
-% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [7 8 9]);    %attitude
-% plot_state_trajectories(trajectories, rollout_time_horizon, rollout_x_nom, [10 11 12]); %body rates
-% 
+%plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [2 4]);
+%plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [1 2]);
+%plot_xy_trajectories(trajectories, rollout_x_nom, initial_state_covariance, x_nom, [3 4]);
 
 plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances);
 % plot_error_metrics(errors, costs, rollout_time_horizon);

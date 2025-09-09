@@ -14,7 +14,8 @@ addpath('./lib/');
 %% [INPUT] specify initial and final state: [pos, vel, theta, omega]
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
-initialState = [0; 0; 0; 0;];   % initial state: at origin, vertically down
+%initialState = [0.0143; 0.0546; 3.52393; 1.7313;];   % initial state: at origin, vertically down
+initialState = [0; 0; 0; 0;];  
 finalState   = [0; 0; pi; 0;];  % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
@@ -46,6 +47,7 @@ x_nom(:,end)'
 
 %% for debugging purposes
 run('./utils/checkOpenLoop_IVP.m');
+run('./utils/checkFeedbackController.m');
 
 keyboard;
 
@@ -57,14 +59,15 @@ close all
 
 %Cost matrices
 % State order: [px; vx; theta; omega]
-% Q = diag([5, 0.1, 10, 0.1]);
-% R = 50; %0.1
-% %P_f = Q;
-% terminalRegionScaling = 1;
 
-Q = 1e-2*diag([5, 0.1, 10, 0.1]);
-R = 10;
-terminalRegionScaling = 1;
+Q = diag([5, 0.1, 10, 0.1]);
+R = 1000; %0.1
+%P_f = Q;
+terminalRegionScaling = 100;
+
+% Q = 1e-2*diag([5, 0.1, 10, 0.1]);
+% R = 10;
+% terminalRegionScaling = 1;
 
 
 run("Step2_FeedbackControllerSynthesis.m");

@@ -117,7 +117,7 @@ P = P_cont;
 %K = K_disc;
 %P = P_disc;
 
-K = zeros(nu,nx,N);
+%K = zeros(nu,nx,N);
 %K = 0.01*K;
 
 %temp = 20;
@@ -164,7 +164,7 @@ function [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom_f, u_nom
     A_f = double(subs(A_symb, [x; u], [x_nom_f; u_nom_f]));
     B_f = double(subs(B_symb, [x; u], [x_nom_f; u_nom_f]));
     
-    [K_f,S_f,CLP] = lqr(A_f,B_f,Q,R);
+    [K_f,S_f,CLP] = lqr(A_f,B_f,Q,R)
 end
 
 %Interpolates state and control vectors

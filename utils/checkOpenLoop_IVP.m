@@ -20,7 +20,7 @@ if ~exist('statePerturbation','var')
     statePerturbation = 0;
 end
 
-startTimeOffset = 49;
+startTimeOffset = N-1;
 x_nom = x_nom(:,end-startTimeOffset:end);
 u_nom = u_nom(:,end-startTimeOffset:end);
 time_instances = time_instances(end-startTimeOffset:end);
@@ -32,7 +32,9 @@ xf = x_nom(:,end);
 
 
 %LQR gain for stabilising at top
-K = [-0.3162   -0.9723   25.4223    5.5127];
+%K = [-0.3162   -0.9723   25.4223    5.5127];
+
+K = 10*[0.0707    0.3946   -0.0058   -0.0057];
 
 % for k = 1:N
 % 
@@ -44,7 +46,7 @@ K = [-0.3162   -0.9723   25.4223    5.5127];
 % end
 
 % Linear interpolation of inputs
-u_func = @(t) interp1(time_instances, u_nom, t, 'linear', 'extrap');
+u_func = @(t) interp1(time_instances, u_nom, t, 'previous', 'extrap');
 
 %system dynamics
 %dynamicsFnHandle is of the form @(x,u) cartpole_dynamics(x,u,cartPoleParameters);
@@ -70,9 +72,9 @@ for k = 1:length(time_instances)-1
     xk = x_sol(:,k);
     uk = u_nom(k);
 
-    % if k > 0.95*N %hold maneuver
-    %     uk = K*(xf - xk);
-    % end
+    if k > 0.9*N %hold maneuver
+        uk = K*(xf - xk);
+    end
 
     % %trapezoidal
     % f_k = cartpole_dynamics(xk, uk);
@@ -89,15 +91,16 @@ for k = 1:length(time_instances)-1
     x_sol(:,k+1) = x_next;
 end
 
-controlLaw = NaN(size(u_nom));
-k_s = 2;
 
-for k = 1:length(time_instances)
-    thisTheta = x_nom(3,k);
-    thisOmega = x_nom(4,k);
-
-    controlLaw(k) = -k_s*thisOmega*cos(thisTheta);
-end
+% controlLaw = NaN(size(u_nom));
+% k_s = 2;
+% 
+% for k = 1:length(time_instances)
+%     thisTheta = x_nom(3,k);
+%     thisOmega = x_nom(4,k);
+% 
+%     controlLaw(k) = -k_s*thisOmega*cos(thisTheta);
+% end
 
 % for k = 1:N-1
 % 
@@ -146,8 +149,9 @@ drawnow;
 %% input profiles
 figure; grid on; hold on
 plot(time_instances, u_nom, 'LineWidth', 1.75);
-plot(time_instances, controlLaw, 'k--', 'LineWidth', 1.75);
+%plot(time_instances, controlLaw, 'k--', 'LineWidth', 1.75);
 xlabel('t (s)'); ylabel('F (N)');
+title('Input profile');
 drawnow
     
 %% Function definitions
@@ -164,7 +168,7 @@ function plotPhasePortraits(x_sol, x_nom, stateDims)
 
     xlabel(['x_{', num2str(stateDims(1)), '}'])
     ylabel(['x_{', num2str(stateDims(2)), '}'])
-    title('Monte Carlo Rollout Trajectories');
+    title('IVP Rollout Trajectory');
     legend('Nominal Trajectory','IVP solution','Location','best');
     %hold off;
 end
