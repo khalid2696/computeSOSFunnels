@@ -47,7 +47,8 @@ time_instances = time_instances(end-startTimeOffset:end);
 
 % Initial condition
 statePerturbation = 0; %5e-3
-x0 = x_nom(:,1) + statePerturbation*ones(size(x_nom,1),1);
+%x0 = x_nom(:,1) + statePerturbation*ones(size(x_nom,1),1);
+x0 = x_nom(:,1) + statePerturbation*rand(size(x_nom,1),1);
 xf = x_nom(:,end);
 
 % Linear interpolation of inputs
