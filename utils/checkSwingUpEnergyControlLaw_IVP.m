@@ -39,14 +39,31 @@ end
 %% Forward rollout
 
 % Initial condition
-statePerturbation = 1e-2; %5e-3
+statePerturbation = 5e-1; %1e-2
 x0 = zeros(4,1) + statePerturbation*rand(size(x_nom,1),1);
+xf = [0 0 pi 0]';
+
+%control strategy parameters
+
+%desired final state
+controlStrategyParameters.xf = xf;
+%gains
+controlStrategyParameters.k_s = 0.75;
+controlStrategyParameters.K = [-10.0000  -16.2819   91.7720   22.6933];
+%switching control strategy
+controlStrategyParameters.modeSwitchingAngle = 0.8*pi;
+controlStrategyParameters.u0 = 5; %some initial input to warmstart the swing-up
+controlStrategyParameters.initialImpulseTime = 0.1;
+%control saturations
+controlStrategyParameters.force_limits = [-12 12];
 
 %system dynamics
-cartpole_dynamics_odeFn = @(t,x) cartpole_dynamics(x, cartPoleParameters);
+cartpole_dynamics_odeFn = @(t,x) cartpole_dynamics(t, x, cartPoleParameters, controlStrategyParameters);
 
 % Time span
-tspan = [0 15];
+N = 100; %number of time instances
+%tspan = [0 15];
+tspan = linspace(0, 10, N);
 
 % ODE solve
 [t_sol, x_sol] = ode45(cartpole_dynamics_odeFn, tspan, x0);
@@ -56,7 +73,11 @@ x_sol = x_sol'; t_sol = t_sol'; %to match the dimensions of x_nom
 % get the input profile after solving for the nominal trajectory
 u_sol = NaN(1,length(t_sol));
 for k = 1:length(t_sol)
-    u_sol(k) = swingUpEnergyControlLaw(x_sol(:,k));
+    if t_sol(k) < controlStrategyParameters.initialImpulseTime
+        u_sol(k) = controlStrategyParameters.u0;
+    else
+        u_sol(k) = swingUpEnergyControlLaw(x_sol(:,k), controlStrategyParameters);
+    end
 end
 
 %% Plot state trajectories
@@ -73,8 +94,10 @@ plot(t_sol, x_sol(2,:), 'LineWidth', 1.5);
 xlabel('t (s)'); ylabel('Cart Velocity (m/s)');
 
 subplot(2,2,3); hold on; grid on;
-plot(t_sol, x_sol(3,:), 'LineWidth', 1.5);
+plot(t_sol, rad2deg(x_sol(3,:)), 'LineWidth', 1.5);
 %plot(time_instances, x_nom(3,:), 'k--', 'LineWidth', 1.75);
+yline(rad2deg(0.8*pi), 'm--', 'Mode-switch');
+yline(180, 'k--', 'Upright');
 xlabel('t (s)'); ylabel('\theta (rad)');
 
 subplot(2,2,4); hold on; grid on;
@@ -96,27 +119,36 @@ xlabel('t (s)'); ylabel('F (N)');
 title('Input profile');
 drawnow
 
+keyboard
 %% animation
 animate_cartpole_trajectory(t_sol, x_sol, cartPoleParameters, 1); %last argument is saveVideoFlag
-    
+
+%% save the nominal trajectory and feedforward input
+time_instances = t_sol;
+x_nom = x_sol;
+u_nom = u_sol;
+
+save('../precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'nom_trajCost', 'dynamicsFnHandle', 'cartPoleParameters');
+
+disp('Saved the nominal trajectory and nominal inputs to a file!');
+disp(' ');
 %% Function definitions
 
-function u = swingUpEnergyControlLaw(x)
+function u = swingUpEnergyControlLaw(x, controlStrategyParameters)
     
-    force_limits = [-12 12];
+    force_limits = controlStrategyParameters.force_limits;
+    k_s = controlStrategyParameters.k_s;
+    K = controlStrategyParameters.K;
+    modeSwitchingAngle = controlStrategyParameters.modeSwitchingAngle;
 
     theta = x(3);
     omega = x(4);
 
     %final state
-    xf = [0 0 pi 0]';
-
-    %control gain parameters
-    k_s = 0.75;
-    K = [-10.0000  -16.2819   91.7720   22.6933];
+    xf = controlStrategyParameters.xf;
     
     %swing up control law
-    if abs(theta) < 0.8*pi
+    if abs(theta) < modeSwitchingAngle
         u = -k_s*omega*cos(theta);
     else
         u = K*(xf - x);
@@ -127,9 +159,8 @@ function u = swingUpEnergyControlLaw(x)
 
 end
 
-function f = cartpole_dynamics(x, cartPoleParameters)
-    % Numerical evaluation of cartpole dynamics
-    
+function f = cartpole_dynamics(t, x, cartPoleParameters, controlStrategyParameters)
+    % Numerical evaluation of cartpole dynamics 
     
     %extract parameters
     M = cartPoleParameters.M; m = cartPoleParameters.m;
@@ -142,7 +173,11 @@ function f = cartpole_dynamics(x, cartPoleParameters)
     omega = x(4);
     
     %swingup control law
-    F = swingUpEnergyControlLaw(x);
+    if t < controlStrategyParameters.initialImpulseTime %for some initial time
+        F = controlStrategyParameters.u0; %some initial force to warm-start the swing up
+    else
+        F = swingUpEnergyControlLaw(x, controlStrategyParameters);
+    end
 
     % Define trigonometric functions
     s_theta = sin(theta);

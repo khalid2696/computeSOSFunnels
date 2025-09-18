@@ -88,9 +88,9 @@ close all; clearvars;
 
 numSamples = 1;
 startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1e-4; %a measure of max initial perturbations to state
+startMaxPerturbation = 1e-7; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-upsamplingFactor = 1; %finer discretization to prevent integration error build-up
+upsamplingFactor = 100; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
                          
 run("./utils/checkClosedLoop_MCRollouts.m");
