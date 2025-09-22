@@ -14,7 +14,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [-2; -5; 2; 0; 0; 0];   % desired final pose
+finalPose   = [-1; 2; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.7;                  % mass (kg)
@@ -29,7 +29,7 @@ dynamicsFnHandle = @(x, u) quadrotor_dynamics(x, u, quadParameters);
 maxTimeHorizon = 15;
 numTimeSteps   = 25;         % number of time samples
 
-drawFlag = 1; % 1: if you want to plot results, 0: otherwise
+drawFlag = 0; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -79,36 +79,37 @@ disp('- - - - - - -'); disp(" ");
 
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
-%condition number (kappa) < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
-for k=1:1:size(P,3)
-    matrix_condition_number(P(:,:,k))
-end
+% %condition number (kappa) < 1e2 or 1e3 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+% for k=1:1:size(P,3)
+%     matrix_condition_number(P(:,:,k))
+% end
 
 %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
-close all; clearvars;
-
-startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 0.05; %a measure of max initial perturbations to state
-                         %decrease this for a smaller initial set
-upsamplingFactor = 40; %finer discretization to prevent integration error build-up
-                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
-                         
-run("./utils/checkClosedLoop_MCRollouts.m");
-drawnow
-
-% for k = 1:25
+% close all; clearvars;
 % 
-%     startTimeIndex = k
-%     startMaxPerturbation = 0.05;
+% startTimeIndex = 1; %start time for the rollouts
+% startMaxPerturbation = 0.05; %a measure of max initial perturbations to state
+%                          %decrease this for a smaller initial set
+% upsamplingFactor = 40; %finer discretization to prevent integration error build-up
+%                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 % 
-%     clearvars -except startMaxPerturbation startTimeIndex
+% run("./utils/checkClosedLoop_MCRollouts.m");
+% drawnow
 % 
-%     run("./utils/checkClosedLoop_MCRollouts.m");
-%     drawnow
-% end
+% % for k = 1:25
+% % 
+% %     startTimeIndex = k
+% %     startMaxPerturbation = 0.05;
+% % 
+% %     clearvars -except startMaxPerturbation startTimeIndex
+% % 
+% %     run("./utils/checkClosedLoop_MCRollouts.m");
+% %     drawnow
+% % end
+% 
+% %keyboard
 
-%keyboard
 %% [Optional] Load all the saved files for further analysis
 
 % clearvars; %close all;
@@ -144,10 +145,39 @@ run("Step3_getDeviationDynamics.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Time-conditioned invariant set analysis (with temporal-dependance)
-disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
-clc; clearvars; close all; 
+% disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
+% clc; clearvars; close all; 
+% 
+% drawFlag = 1;
+% 
+% %specify SOS program hyperparameters
+% maxIter = 1; %maximum number of iterations
+% 
+% % Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+% %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+% %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+% rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+%                                 % keep it greater than 0!
+% rhoInitialGuessExpCoeff = 3; %[TUNEABLE] c: decrease value if initial guess fails
+% 
+% %rho0 = 1e-3 and c = 3 seam to give good initial feasible guess
+% 
+% usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
+% try                               
+%     run("Step4_computeTimeSampledInvarianceCertificates.m");
+% catch
+%     disp('Could not find a successful initial guess to start the alternation scheme!');
+% end
+% 
+% %return
 
-drawFlag = 1;
+%% optimize once the feasibility check passes through
+disp('Computing time-sampled invariant set certificates using SOS programming..'); 
+disp(' ');
+
+close all
+%drawFlag = 1;
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
@@ -160,27 +190,16 @@ rhoInitialGuessConstant = 1e-3; %[TUNEABLE] rho_0: decrease value if initial gue
                                 % keep it greater than 0!
 rhoInitialGuessExpCoeff = 3; %[TUNEABLE] c: decrease value if initial guess fails
 
-%1e-3 and 3
+%rho0 = 1e-3 and c = 3 seam to give good initial feasible guess
 
-usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
-try                               
-    run("Step4_computeTimeSampledInvarianceCertificates.m");
-catch
-    disp('Could not find a successful initial guess to start the alternation scheme!');
-end
-
-%return
-
-%% optimize once the feasibility check passes through
-close all
-%drawFlag = 1;
 tic
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 toc
 
 %% [Optional] Plot computed funnels
-clc; clearvars; close all
+%clc; 
+clearvars; close all
 
 projectionDims_2D = [1 2]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");

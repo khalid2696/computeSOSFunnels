@@ -94,7 +94,7 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
         %Trapezoidal integration
         f_k = quadrotor_dynamics(xk, uk);
         f_k_next = quadrotor_dynamics(X(:, k+1), uk);
-        x_next = xk + (dt/2) * (f_k + f_k_next); 
+        x_next = xk + (dt/2) * (f_k + f_k_next);
 
         %RK4 integration
         %k1 = quadrotor_dynamics(xk, uk);
@@ -149,7 +149,7 @@ getNominalTrajectory_using_DirectCollocation(quadrotor_dynamics, x0, xf, T_max, 
     
     %% Solve using IPOPT
     %options = sdpsettings('solver', 'ipopt', 'verbose', 2);
-    options = sdpsettings('solver', 'ipopt', 'verbose', 2);
+    options = sdpsettings('solver', 'ipopt', 'verbose', 0);
     options.ipopt.max_iter = 5000; % Set the desired tolerance
     options.ipopt.tol = 1e-6; % Set the desired tolerance
     options.ipopt.acceptable_tol = 1e-4; % Set the acceptable tolerance 

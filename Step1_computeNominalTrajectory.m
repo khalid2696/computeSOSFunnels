@@ -1,5 +1,5 @@
 %clc; clearvars; close all
-%yalmip('clear');
+yalmip('clear');
 
 disp('Hang on..');
 disp('Computing nominal trajectory using direct collocation trajectory optimisation');
@@ -70,7 +70,7 @@ end
 
 
 %% save the nominal trajectory and feedforward input
-save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'dynamicsFnHandle', 'quadParameters');
+save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'nom_trajCost', 'dynamicsFnHandle', 'quadParameters');
 
 disp('Saved the nominal trajectory and nominal inputs to a file!');
 disp(' ');

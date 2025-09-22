@@ -150,9 +150,7 @@ function deviation_dynamics = computeDeviationDynamics(taylor_approx_at_a, symVa
     % fVal_at_nomStateInput = vpa(fVal_at_nomStateInput, 6) %cleanup upto 6 decimal places
 
     state = x_nom + xBar_pvar; %nominal state + deviation
-    input = u_nom - controlGainMatrix*xBar_pvar;
-    %note that u1 and u2 are not used since they depend on x1, x2, x3 as
-    %[u1; u2] = controlGainMatrix*[x1 x2 x3]'
+    input = u_nom - controlGainMatrix*xBar_pvar; %nominal input + feedback input
 
     pvarVars = [state', input'];  % Corresponding pvar variables
     

@@ -11,7 +11,7 @@ if ~exist('drawFlag','var')
     drawFlag = 1; %by default, plot the results
 end
 
-usageMode = 'shapeOptimisation';
+%usageMode = 'shapeOptimisation';
 
 %% Status message
 %Quantities at our disposal now
@@ -187,8 +187,8 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
-	    disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
-        disp(' ');
+	    %disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+        %disp(' ');
     end
 
     if ~infeasibilityStatus
