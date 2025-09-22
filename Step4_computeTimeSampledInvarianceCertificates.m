@@ -228,8 +228,6 @@ disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellip
 
 %% Status message
 
-clc
-
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
 disp(' ');
 

@@ -43,6 +43,26 @@ if ~exist('projectionDims_2D','var')
     projectionDims_2D = [1 3];
 end 
 
+%finer discretization to prevent integration error build-up
+if ~exist('upsamplingFactor','var')
+    upsamplingFactor = 40;
+end
+
+% %% Upsample trajectories and matrices for forward rollouts
+% 
+% Nd = N*upsamplingFactor; % number of interpolated points
+% startTimeIndex = (startTimeIndex-1)*upsamplingFactor + 1;
+% 
+% % Fine time vector for interpolation: upsampled spacing
+% t_fine = linspace(time_instances(1), time_instances(end), Nd);
+% 
+% [x_nom, u_nom] = upsample_state_control_trajectories(time_instances, x_nom, u_nom, t_fine);
+% 
+% P = upsample_matrix(P, time_instances, t_fine);
+% K = upsample_matrix(K, time_instances, t_fine);
+% 
+% time_instances = t_fine;
+
 %% Monte Carlo rollouts for empirical verification
 
 %t0 = time_instances(1); tf = time_instances(end); 
@@ -111,6 +131,43 @@ plotMetrics(LyapunovFnValue_profiles, errors, costs, rollout_time_horizon);
 clearvars;
 
 %% Function defintions
+
+%Interpolates state and control vectors
+function [x_fine, u_fine, t_fine] = upsample_state_control_trajectories(t_coarse, x_coarse, u_coarse, t_fine)
+
+    % Dimensions
+    Nd = length(t_fine); n = size(x_coarse, 1); m = size(u_coarse, 1);
+
+    % Preallocate outputs
+    x_fine = zeros(n, Nd);
+    u_fine = zeros(m, Nd);
+
+    % Interpolate each row (dimension) of x with cubic spline
+    for i = 1:n
+        x_fine(i, :) = interp1(t_coarse, x_coarse(i, :), t_fine, 'spline'); % Cubic interpolation
+    end
+
+    % Interpolate each row (dimension) of u with linear interpolation
+    for i = 1:m
+        u_fine(i, :) = interp1(t_coarse, u_coarse(i, :), t_fine, 'linear'); % Linear interpolation
+    end
+end
+
+%Interpolates an input matrix
+function M_fine = upsample_matrix(M_coarse, t_coarse, t_fine)
+    % M_coarse: d1 × d2 × N
+    % t_coarse: 1 × N
+    % t_fine  : 1 × Nd (time vector corresponding to upsampling)
+    
+    [dim1, dim2, ~] = size(M_coarse); N_fine = length(t_fine);
+    
+    M_fine = zeros(dim1, dim2, N_fine);
+    for i = 1:dim1
+        for j = 1:dim2
+            M_fine(i, j, :) = interp1(t_coarse, squeeze(M_coarse(i, j, :)), t_fine, 'linear');
+        end
+    end
+end
 
 % Sampling interior or surface of an Ellipsoid   
 function samplePoints = samplePointsFromEllipsoid(center, ellipsoidMatrix, numSamplePoints, samplingRegion)

@@ -2,7 +2,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     getNominalTrajectory_using_DirectCollocation(cartpole_dynamics, x0, xf, T_max, N)
 
     %% Optimization parameters - cost function and state/input constraints
-    timeHorizon_weight = 0; %0.25, 0.5, 1     % Weight for minimizing time
+    timeHorizon_weight = 1; %0.25, 0.5, 1     % Weight for minimizing time
     controlEffort_weight = 0.01;   % Weight for control effort
     controlSmoothnessWeight = 10;  %10    % NEW: Penalize control derivatives
     stateSmoothnessWeight = 10;    %10    % NEW: Penalize state derivatives
@@ -55,7 +55,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         timeHorizon_weight = 1;
     end
 
-    disp('Done with figuring out the mode.');
+    disp('Done with figuring out the mode:'); disp(operationMode);
     %% Define Decision Variables
     T = sdpvar(1);              % Variable time horizon
     %T = T_max;
@@ -104,20 +104,20 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
         %f_k = cartpole_dynamics(xk, uk);
         %x_next = xk + dt*f_k;
 
-        % %Trapezoidal integration
-        % f_k = cartpole_dynamics(xk, uk);
-        % f_k_next = cartpole_dynamics(X(:, k+1), uk);
-        % x_next = xk + (dt/2) * (f_k + f_k_next);
+        %Trapezoidal integration
+        f_k = cartpole_dynamics(xk, uk);
+        f_k_next = cartpole_dynamics(X(:, k+1), uk);
+        x_next = xk + (dt/2) * (f_k + f_k_next);
 
-        %RK4 integration
-        k1 = cartpole_dynamics(xk, uk);
-        k2 = cartpole_dynamics(xk + 0.5 * dt * k1, uk);
-        k3 = cartpole_dynamics(xk + 0.5 * dt * k2, uk);
-        k4 = cartpole_dynamics(xk + dt * k3, uk);
-        x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
+        % %RK4 integration
+        % k1 = cartpole_dynamics(xk, uk);
+        % k2 = cartpole_dynamics(xk + 0.5 * dt * k1, uk);
+        % k3 = cartpole_dynamics(xk + 0.5 * dt * k2, uk);
+        % k4 = cartpole_dynamics(xk + dt * k3, uk);
+        % x_next = xk + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4); % Update state
 
         constraints = [constraints, X(:, k+1) == x_next];
-        k
+        %k
     end
     
     disp('Done with collocation constraints');
@@ -185,7 +185,7 @@ function [x_opt, u_opt, time_instances_opt, cost_opt, diagnostics] = ...
     disp('Done with all constraints');
 
     %% Solve using IPOPT
-    options = sdpsettings('solver', 'ipopt', 'verbose', 1);
+    options = sdpsettings('solver', 'ipopt', 'verbose', 0);
     
     % IPOPT-specific options for better convergence
     options.ipopt.max_iter = 4000;
