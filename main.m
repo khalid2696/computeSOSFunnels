@@ -14,7 +14,7 @@ addpath('./lib/');
 %% [INPUT] specify initial and final pose: position and Euler angles (roll, pitch, yaw) in radians
 
 initialPose = [0; 0; 2; 0; 0; 0];   % initial state: origin at height of 2m with zero attitude
-finalPose   = [-1; 2; 2; 0; 0; 0];   % desired final pose
+finalPose   = [1; 4; 2; 0; 0; 0];   % desired final pose
 
 %% Specify Quadrotor Parameters (not defining these will result in an error)
 quadParameters.m = 0.7;                  % mass (kg)
