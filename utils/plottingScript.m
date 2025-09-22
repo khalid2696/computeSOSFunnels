@@ -1,4 +1,5 @@
-clc; clearvars; close all
+%clc; 
+clearvars; close all
 
 %% Add directories
 addpath('../lib/');

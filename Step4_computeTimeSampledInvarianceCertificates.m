@@ -46,7 +46,6 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-
 rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
                        %Default Value: 0.001
@@ -144,7 +143,7 @@ for iter=1:maxIter
                                                                               multiplierPolyDeg, options, tolerance);
  
     if ~infeasibilityStatus
-        disp('Feasibility-check step: passed'); disp(' ');    
+        disp('Feasibility-check step: passed'); disp(' ');
     end
 
     if infeasibilityStatus
@@ -185,7 +184,7 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
-        disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+	disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
         disp(' ');
     end
 
@@ -212,7 +211,7 @@ for iter=1:maxIter
     %assigning values for next iteration
     prevRhoScaling = currRhoScaling;
     currRhoScaling = (1 + rhoStepUpValue)*prevRhoScaling;
-    %currRhoScaling = rhoScaleIncrements.*prevRhoScalintocg;
+    %currRhoScaling = rhoScaleIncrements.*prevRhoScaling;
 
     startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/(1 + rhoStepUpValue); %increasing the inlet volume
     
@@ -271,7 +270,6 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     prog = sosprogram(xbar);
     
     for k = 2:1:N
-    %parfor k = 2:N
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -372,6 +370,9 @@ function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ..
     end
     
     %imposing SOS constraints
+    % 1. Positive definiteness of V at index 1
+    prog = sosineq(prog, candidateVArray{1} - tolerance*(xbar'*xbar));
+
     objective = 0;
     objective = objective + rhoValArray{1}; %include rho corresponding to inlet
     for k = 2:1:N
@@ -485,14 +486,27 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
             error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
-        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;    
+        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
     end
-
 end
 
 
 function M = getEllipsoidMatrix_nD(V_polyFn, n)
     
+    %for some reason, SOSTOOLS orders the monomials in this particular
+    %lexicographic order, 10 12 12 before 2, 21 22 .. before 3, and so on
+    %so using that order to retrieve the coefficients and save it
+    
+    % Convert numbers to strings for lexicographic sorting
+    indices = 1:n;
+    stringIndices = arrayfun(@num2str, indices, 'UniformOutput', false);
+    
+    % Sort strings lexicographically
+    [~, sorted_indices] = sort(stringIndices);
+    indexKeySequence = indices(sorted_indices);
+
+    %indexKeySequence = [1 2 3];
+
     M = NaN(n); %empty nxn matrix to hold the ellipsoid matrix
     
     if length(V_polyFn.coefficient) <  n*(n-1)/2
@@ -502,11 +516,12 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     k = 1;
     for i=1:n
         for j=i:n
-            if i == j %diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k));
+            ind1 = indexKeySequence(i); ind2 = indexKeySequence(j); %retrieve the index specific for this decomposition
+            if ind1 == ind2 %diagonal terms
+                M(ind1,ind2) = double(V_polyFn.coefficient(k));
             else      %off-diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k))/2;
-                M(j,i) = double(V_polyFn.coefficient(k))/2;
+                M(ind1,ind2) = double(V_polyFn.coefficient(k))/2;
+                M(ind2,ind1) = double(V_polyFn.coefficient(k))/2;
             end
 
             k = k+1;
@@ -555,23 +570,28 @@ function kappa = matrix_condition_number(A, norm_type)
 end
 
 %% Plotting functions
-function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
+function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling, projectionDims)
+    
+    if nargin < 4
+        projectionDims = [1 2];
+    end
+
     figure
     hold on;
     grid on; 
     axis equal;
     
-    for k=1:length(x_nom)
+    for k=1:1:size(x_nom,2)
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
+        M_xy = project_ellipsoid_matrix(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
         plotEllipse(center, M_xy)
     end 
     
     title('Invariant Ellipsoidal Sets along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
 end
 
 function plotInitialSet(x_initial, initialEllipsoid)
