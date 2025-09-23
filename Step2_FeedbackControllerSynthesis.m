@@ -117,11 +117,14 @@ P = P_cont;
 %K = K_disc;
 %P = P_disc;
 
-%K = zeros(nu,nx,N);
-%K = 0.01*K;
+% %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%
+% %Note: specifically for swing-up maneuver
+% %!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!%
+% K = zeros(nu,nx,N);
+% for k = 0:round(0.25*N) %Last 25 percent of the time-horizon
+%     K(:,:,end-k) = 1*[-10.0000  -16.2819   91.7720   22.6933];
+% end
 
-%temp = 20;
-%K(:,:,1:end-temp) = zeros(nu,nx,N-temp);
 
 disp('Finished synthesizing a time-varying LQR stabilizing feedback controller');
 disp(' ');

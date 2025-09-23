@@ -6,7 +6,7 @@ addpath('../lib/');
 
 %% Load the nominal trajectory and LQR gains
 load('../precomputedData/nominalTrajectory.mat');
-N = length(time_instances);
+%N = length(time_instances);
 
 % -- Status message: Quantities at our disposal now -- %
 
@@ -16,13 +16,24 @@ N = length(time_instances);
 % dynamicsFnHandle : the function handle of the system dynamics
 
 %Specify the initial state perturbation
-if ~exist('statePerturbation','var')
-    statePerturbation = 0;
+if ~exist('intialStatePerturbation','var')
+    intialStatePerturbation = 0;
 end
+
+numSamples = 500;
+
+%% Initialisation parameters
+nx = 4; % state-dimensionality 
+nu = 1; % input-dimensionality
+
+% Initial condition
+intialStatePerturbation = 1e-3; %1e-2
+x0 = -intialStatePerturbation/2*ones(nx,1) + intialStatePerturbation*rand(nx,1);
+%x0 = zeros(4,1);
+xf = [0 0 pi 0]';
 
 %% Feedback controller synthesis (need to be run only during design)
 
-% nx = size(x_nom, 1); nu = size(u_nom, 1); N = length(time_instances);
 % x = createSymbolicVector('x', nx); %state vector
 % u = createSymbolicVector('u', nu); %input vector
 % % [x1, x2, x3, x4] -- [px; vx; theta; omega]
@@ -33,17 +44,11 @@ end
 % Q = 10*eye(nx);
 % R = 0.1;
 % 
-% [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, x_nom(:,end), u_nom(:,end), Q, R);
+% [K_f, S_f] = compute_lqr_gain_at_terminal_state(f, x, u, xf, 0, Q, R);
 % 
 % keyboard
-%% Forward rollout
 
-% Initial condition
-statePerturbation = 5e-1; %1e-2
-x0 = zeros(4,1) + statePerturbation*rand(size(x_nom,1),1);
-xf = [0 0 pi 0]';
-
-%control strategy parameters
+%% Control strategy parameters
 
 %desired final state
 controlStrategyParameters.xf = xf;
@@ -53,75 +58,97 @@ controlStrategyParameters.K = [-10.0000  -16.2819   91.7720   22.6933];
 %switching control strategy
 controlStrategyParameters.modeSwitchingAngle = 0.8*pi;
 controlStrategyParameters.u0 = 5; %some initial input to warmstart the swing-up
-controlStrategyParameters.initialImpulseTime = 0.1;
+controlStrategyParameters.initialImpulseTime = 0.1; %time duration of warmstart
 %control saturations
 controlStrategyParameters.force_limits = [-12 12];
+
+%% Forward rollout
 
 %system dynamics
 cartpole_dynamics_odeFn = @(t,x) cartpole_dynamics(t, x, cartPoleParameters, controlStrategyParameters);
 
 % Time span
-N = 100; %number of time instances
+N = 100; %number of time instances (discretisation)
 %tspan = [0 15];
 tspan = linspace(0, 10, N);
 
-% ODE solve
-[t_sol, x_sol] = ode45(cartpole_dynamics_odeFn, tspan, x0);
-%[t_sol, x_sol] = ode45(cartpole_dynamics_odeFn, time_instances, x0);
-x_sol = x_sol'; t_sol = t_sol'; %to match the dimensions of x_nom
+trajectories = cell(numSamples, 1);
+input_profiles = cell(numSamples, 1);
 
-% get the input profile after solving for the nominal trajectory
-u_sol = NaN(1,length(t_sol));
-for k = 1:length(t_sol)
-    if t_sol(k) < controlStrategyParameters.initialImpulseTime
-        u_sol(k) = controlStrategyParameters.u0;
-    else
-        u_sol(k) = swingUpEnergyControlLaw(x_sol(:,k), controlStrategyParameters);
+for i = 1:numSamples
+    x0 = -intialStatePerturbation/2*ones(nx,1) + intialStatePerturbation*rand(nx,1);
+    
+    % ODE solve
+    [t_sol, x_sol] = ode45(cartpole_dynamics_odeFn, tspan, x0);
+    %[t_sol, x_sol] = ode45(cartpole_dynamics_odeFn, time_instances, x0);
+    x_sol = x_sol'; t_sol = t_sol'; %to match the dimensions of x_nom
+    
+    % get the input profile after solving for the nominal trajectory
+    u_sol = NaN(1,length(t_sol));
+    for k = 1:length(t_sol)
+        if t_sol(k) < controlStrategyParameters.initialImpulseTime
+            u_sol(k) = controlStrategyParameters.u0;
+        else
+            u_sol(k) = swingUpEnergyControlLaw(x_sol(:,k), controlStrategyParameters);
+        end
     end
+
+    trajectories{i} = x_sol;
+    input_profiles{i} = u_sol;
 end
 
 %% Plot state trajectories
 figure;
 
 subplot(2,2,1); hold on; grid on;
-plot(t_sol, x_sol(1,:), 'LineWidth', 1.5);
-%plot(time_instances, x_nom(1,:), 'k--', 'LineWidth', 1.75);
+for i = 1:numSamples
+    x_sol = trajectories{i};
+    plot(t_sol, x_sol(1,:), 'b', 'LineWidth', 1.5);
+end
 xlabel('t (s)'); ylabel('Cart Position (m)');
 
 subplot(2,2,2); hold on; grid on;
-plot(t_sol, x_sol(2,:), 'LineWidth', 1.5);
-%plot(time_instances, x_nom(2,:), 'k--', 'LineWidth', 1.75);
+for i = 1:numSamples
+    x_sol = trajectories{i};
+    plot(t_sol, x_sol(2,:), 'b', 'LineWidth', 1.5);
+end
 xlabel('t (s)'); ylabel('Cart Velocity (m/s)');
 
 subplot(2,2,3); hold on; grid on;
-plot(t_sol, rad2deg(x_sol(3,:)), 'LineWidth', 1.5);
-%plot(time_instances, x_nom(3,:), 'k--', 'LineWidth', 1.75);
-yline(rad2deg(0.8*pi), 'm--', 'Mode-switch');
+for i = 1:numSamples
+    x_sol = trajectories{i};
+    plot(t_sol, rad2deg(x_sol(3,:)), 'b', 'LineWidth', 1.5);
+end
+yline(rad2deg(controlStrategyParameters.modeSwitchingAngle), 'm--', 'Mode-switch');
 yline(180, 'k--', 'Upright');
 xlabel('t (s)'); ylabel('\theta (rad)');
 
 subplot(2,2,4); hold on; grid on;
-plot(t_sol, x_sol(4,:), 'LineWidth', 1.5);
-%plot(time_instances, x_nom(4,:), 'k--', 'LineWidth', 1.75);
+for i = 1:numSamples
+    x_sol = trajectories{i};
+    plot(t_sol, x_sol(4,:), 'b', 'LineWidth', 1.5);
+end
 xlabel('t (s)'); ylabel('\theta dot (rad/s)');
 
 sgtitle('Cart-Pole State Trajectories');
 
 %% phase portraits
-plotPhasePortraits(x_sol, x_nom, [1 3]);
-drawnow;
+plotPhasePortraits(trajectories, intialStatePerturbation, [1 3]);
 
 %% input profiles
 figure; grid on; hold on
-plot(t_sol, u_sol, 'LineWidth', 1.75);
-%plot(T,u_stabilize, 'g:','LineWidth', 1.75);
+for i = 1:numSamples
+    u_sol = input_profiles{i};
+    plot(t_sol, u_sol, 'k-.', 'LineWidth', 1.75);
+end
 xlabel('t (s)'); ylabel('F (N)');
 title('Input profile');
 drawnow
 
-keyboard
+return
+
 %% animation
-animate_cartpole_trajectory(t_sol, x_sol, cartPoleParameters, 1); %last argument is saveVideoFlag
+%animate_cartpole_trajectory(t_sol, x_sol, cartPoleParameters, 1); %last argument is saveVideoFlag
 
 %% save the nominal trajectory and feedforward input
 time_instances = t_sol;
@@ -224,23 +251,43 @@ end
 % end
 
 
-function plotPhasePortraits(x_sol, x_nom, stateDims)
+function plotPhasePortraits(trajectories, intialStatePerturbation, stateDims)
     % Plot all trajectories and nominal trajectory
     figure; hold on; grid on; axis equal;
+    
+    x0 = zeros(4,1);
 
-    if nargin < 3
+    if nargin < 2
         stateDims = [1 3];
     end
     
-    plot(x_nom(stateDims(1), :), x_nom(stateDims(2), :), 'k--', 'LineWidth', 2);
-    plot(x_sol(stateDims(1), :), x_sol(stateDims(2), :), 'b-', 'LineWidth', 1.5);
+    for i = 1:length(trajectories)
+        x_sol = trajectories{i};
+        plot(x_sol(stateDims(1), :), x_sol(stateDims(2), :), 'b-', 'LineWidth', 1.5);
+    end
 
     xlabel(['x_{', num2str(stateDims(1)), '}'])
     ylabel(['x_{', num2str(stateDims(2)), '}'])
-    title('IVP Rollout Trajectory');
-    legend('Nominal Trajectory','IVP solution', 'Location','best');
+    title('MC Rollout Trajectories');
+    
+    drawnow
+
+    %Visualise the set from which initial states were sampled
+    % Generate angles for the circle
+    theta = linspace(0, 2*pi, 100); % 100 points for a smooth circle
+    
+    % Calculate x and y coordinates
+    x = intialStatePerturbation * cos(theta) + x0(stateDims(1));
+    y = intialStatePerturbation * sin(theta) + x0(stateDims(2));
+    
+    % Plot the circle
+    plot(x, y, '--g', 'LineWidth',1.4);
+    
+
+    %legend('Nominal Trajectory','IVP solution', 'Location','best');
     %hold off;
 end
+
 
 % Animated visualization function
 function animate_cartpole_trajectory(t_opt, x_opt, params, saveVideoFlag, filename)
@@ -369,4 +416,17 @@ function animate_cartpole_trajectory(t_opt, x_opt, params, saveVideoFlag, filena
     %     disp(['Animation saved as ', filename]);
     % end
 
+end
+
+function drawCircle(center, radius)
+    %Visualise the set from which initial states were sampled
+    % Generate angles for the circle
+    theta = linspace(0, 2*pi, 100); % 100 points for a smooth circle
+    
+    % Calculate x and y coordinates
+    x = radius * cos(theta) + center(1);
+    y = radius * sin(theta) + center(2);
+    
+    % Plot the circle
+    plot(x, y, '--g', 'LineWidth',1.4);
 end

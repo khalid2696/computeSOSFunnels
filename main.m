@@ -15,8 +15,8 @@ addpath('./lib/');
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
 
-initialState = [0; 0; pi; 0;];  % initial state: at origin, vertically down
-finalState   = [-2; 0; pi; 0;];  % desired final state
+initialState = [0; 0; 0; 0;];  % initial state: at origin, vertically down
+finalState   = [3; 0; 0; 0;];  % desired final state
 
 %modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
 %theta constraints accordingly (based on whether it's upright or hanging down)
@@ -34,7 +34,8 @@ dynamicsFnHandle = @(x, u) cartpole_dynamics(x, u, cartPoleParameters);
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 20; %10 for swing down
-numTimeSteps = 25;  % number of time samples
+numTimeSteps = 25;  % number of time samples %N = 25 for top and down balance
+                     %N = 100 for swing-up and swing-down
 
 drawFlag = 1; % 1: if you want to plot results, 0: otherwise
 run("Step1_computeNominalTrajectory.m");
@@ -66,7 +67,7 @@ close all
 % terminalRegionScaling = 100;
 
 Q = diag([5, 0.1, 10, 0.1]);
-R = 10; %0.1 for down-balance (theta = 0), and %10 for top-balance (theta = pi)
+R = 0.1; %0.1 for down-balance (theta = 0), and %10 for top-balance (theta = pi)
 terminalRegionScaling = 1;
 
 
@@ -86,11 +87,11 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 
 close all; clearvars;
 
-numSamples = 500;
+numSamples = 250;
 startTimeIndex = 1; %start time for the rollouts
 startMaxPerturbation = 1e-1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-upsamplingFactor = 50; %finer discretization to prevent integration error build-up
+upsamplingFactor = 1; %finer discretization to prevent integration error build-up
                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 
 run("./utils/checkClosedLoop_MCRollouts.m");
@@ -107,7 +108,7 @@ drawnow
 %     drawnow
 % end
 % 
-% keyboard
+keyboard
 %% [Optional] Load all the saved files for further analysis
 
 % clearvars; close all;

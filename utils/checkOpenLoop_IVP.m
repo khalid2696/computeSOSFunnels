@@ -1,4 +1,4 @@
-%clc; close all 
+clc; close all 
 clearvars;
 
 %% Add directories
@@ -26,7 +26,7 @@ u_nom = u_nom(:,end-startTimeOffset:end);
 time_instances = time_instances(end-startTimeOffset:end);
 
 % Initial condition
-statePerturbation = 0;
+statePerturbation = 1e-3;
 x0 = x_nom(:,1) + statePerturbation*ones(size(x_nom,1),1);
 xf = x_nom(:,end);
 
@@ -76,10 +76,10 @@ for k = 1:length(time_instances)-1
         uk = K*(xf - xk);
     end
 
-    % %trapezoidal
-    % f_k = cartpole_dynamics(xk, uk);
-    % f_k_next = cartpole_dynamics(xk + f_k*dt, uk);
-    % x_next = xk + (dt/2) * (f_k + f_k_next);
+    %trapezoidal
+    f_k = cartpole_dynamics(xk, uk);
+    f_k_next = cartpole_dynamics(xk + f_k*dt, uk);
+    x_next = xk + (dt/2) * (f_k + f_k_next);
 
     %RK4 integration    
     k1 = cartpole_dynamics(xk, uk);
