@@ -1,5 +1,9 @@
 %clc; clearvars; close all
+<<<<<<< HEAD
 %yalmip('clear');
+=======
+yalmip('clear');
+>>>>>>> unicycle
 
 disp('Hang on..');
 disp('Computing nominal trajectory using direct collocation trajectory optimisation');
@@ -15,8 +19,13 @@ if exist('initialState','var') || exist('finalState','var')
     x0 = initialState;
     xf = finalState;
 else
+<<<<<<< HEAD
     x0 = [0; 0; 0; 0;];   %Initial state: pendulum hanging down, cart at origin
     xf = [1; 0; pi; 0;];  %Final state: pendulum balanced upright, cart at specific position
+=======
+    x0 = [0; 0; pi/2;];    %random initial state
+    xf = [0; 2; pi/2; 0;]; %random final state
+>>>>>>> unicycle
 end
 
 if exist('numTimeSteps','var')
@@ -51,7 +60,7 @@ if diagnostics.problem ~= 0 %if the optimisation fails, relax the time-horizon a
 end
 
 %% save the nominal trajectory and feedforward input
-save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'dynamicsFnHandle');
+save('./precomputedData/nominalTrajectory.mat', 'time_instances', 'x_nom', 'u_nom', 'nom_trajCost', 'dynamicsFnHandle');
 
 disp('Saved the nominal trajectory and nominal inputs to a file!');
 disp(' ');

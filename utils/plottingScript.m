@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 clc; clearvars; close all
+=======
+%clc; 
+clearvars; close all
+>>>>>>> unicycle
 
 %% Add directories
 addpath('../lib/');

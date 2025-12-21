@@ -1,5 +1,4 @@
 %clc; clearvars; close all
-
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
@@ -7,6 +6,12 @@ warning('off','MATLAB:singularMatrix');
 load('./precomputedData/nominalTrajectory.mat');
 load('./precomputedData/LQRGainsAndCostMatrices.mat');
 load('./precomputedData/deviationDynamics.mat');
+
+if ~exist('drawFlag','var')
+    drawFlag = 1; %by default, plot the results
+end
+
+usageMode = 'shapeOptimisation';
 
 %% Status message
 %Quantities at our disposal now
@@ -41,7 +46,7 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
+rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
                        %Default Value: 0.001
 
@@ -52,9 +57,14 @@ goalScaling = 0.8;  %Keep it less than 1
 
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
+<<<<<<< HEAD
 % Exponentially evolving rho_guess
 % rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)), 
 % t_k = tf --> rhoVal = rho_0; t_k = 0 --> rhoVal = (rho_0/e^c); 
+=======
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% t_k = tf --> rhoVal = rho_0; t_k = t0 --> rhoVal = (rho_0*e^c); 
+>>>>>>> unicycle
 
 %[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
@@ -66,7 +76,11 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
+<<<<<<< HEAD
     rhoInitialGuessExpCoeff = 0.5;
+=======
+    rhoInitialGuessExpCoeff = 2; %c
+>>>>>>> unicycle
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -84,32 +98,44 @@ startRegionEllipsoidMatrix = (1/startScaling)*P(:,:,1)/rhoInitialGuess(1);
 
 %% Plot guess funnel and start/end regions
 
-%plot(time_instances, rhoInitialGuess);
-%plotFunnel(x_nom, ellipsoidMatrices, ones(size(rhoInitialGuess)));
+% if drawFlag
+%     plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+%     title('Initial guess funnel');
+%     plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+%     plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+% end
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-title('Initial guess funnel');
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
 %% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
 
 [~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
                                                                         startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                           multiplierPolyDeg, options, tolerance);
 
-plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
-plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+if drawFlag
+    plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+
+    if ~infeasibilityStatus
+        title('Initial guess V and rho scaling (feasible)');
+    else
+        title('Initial guess V and rho scaling (infeasible)');
+    end
+end
 disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
-    title('Initial guess V and rho scaling (feasible)');
     disp('Feasibility check passed for given rho guess..');
 else
-    title('Initial guess V and rho scaling (infeasible)');
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
+<<<<<<< HEAD
+=======
+initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
+initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
+
+>>>>>>> unicycle
 if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
     return
 end
@@ -131,18 +157,10 @@ for iter=1:maxIter
  
     if ~infeasibilityStatus
         disp('Feasibility-check step: passed'); disp(' ');
-        
-        %plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        %plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        %plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        %title('A valid funnel certificate');
     end
 
     if infeasibilityStatus
         if iter == 1
-            %plotFunnel(x_nom, P, currRhoScaling);
-            %plotFinalSet(x_nom(:,1), P(:,:,1)/rho_Start);
-            %title('Scaling of cost-go-matrices (unsuccessful)')
             error('Could not find a successful initial guess to start the alternation scheme!')
         else
             disp('Infeasibility! Exiting the alternation scheme..')
@@ -179,17 +197,23 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
+<<<<<<< HEAD
         disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+=======
+	disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+>>>>>>> unicycle
         disp(' ');
     end
 
     if ~infeasibilityStatus
         disp('Optimisation step: passed'); disp(' ');
         
-        plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
-        plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
-        plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
-        
+        if drawFlag
+            plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
+            plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+            plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+        end
+
         title('Optimised funnel certificate');
         
         % display some volumetric properties
@@ -229,12 +253,10 @@ disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellip
 
 %% Status message
 
-clc
-
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
 disp(' ');
 
-%% Save the multipliers, caniddate V and level-set boundary value to a file
+%% Save the multipliers, candidate V and level-set boundary value to a file
 
 rhoScaling = prevRhoScaling;
 multiplierTerms = feasibleMultiplierTerms;
@@ -265,7 +287,10 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     prog = sosprogram(xbar);
     
     for k = 2:1:N
+<<<<<<< HEAD
     %parfor k = 2:N
+=======
+>>>>>>> unicycle
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -366,6 +391,9 @@ function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus] = ..
     end
     
     %imposing SOS constraints
+    % 1. Positive definiteness of V at index 1
+    prog = sosineq(prog, candidateVArray{1} - tolerance*(xbar'*xbar));
+
     objective = 0;
     objective = objective + rhoValArray{1}; %include rho corresponding to inlet
     for k = 2:1:N
@@ -479,14 +507,33 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
             error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
+<<<<<<< HEAD
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;    
     end
 
+=======
+        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
+    end
+>>>>>>> unicycle
 end
 
 
 function M = getEllipsoidMatrix_nD(V_polyFn, n)
     
+    %for some reason, SOSTOOLS orders the monomials in this particular
+    %lexicographic order, 10 12 12 before 2, 21 22 .. before 3, and so on
+    %so using that order to retrieve the coefficients and save it
+    
+    % Convert numbers to strings for lexicographic sorting
+    indices = 1:n;
+    stringIndices = arrayfun(@num2str, indices, 'UniformOutput', false);
+    
+    % Sort strings lexicographically
+    [~, sorted_indices] = sort(stringIndices);
+    indexKeySequence = indices(sorted_indices);
+
+    %indexKeySequence = [1 2 3];
+
     M = NaN(n); %empty nxn matrix to hold the ellipsoid matrix
     
     if length(V_polyFn.coefficient) <  n*(n-1)/2
@@ -496,11 +543,12 @@ function M = getEllipsoidMatrix_nD(V_polyFn, n)
     k = 1;
     for i=1:n
         for j=i:n
-            if i == j %diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k));
+            ind1 = indexKeySequence(i); ind2 = indexKeySequence(j); %retrieve the index specific for this decomposition
+            if ind1 == ind2 %diagonal terms
+                M(ind1,ind2) = double(V_polyFn.coefficient(k));
             else      %off-diagonal terms
-                M(i,j) = double(V_polyFn.coefficient(k))/2;
-                M(j,i) = double(V_polyFn.coefficient(k))/2;
+                M(ind1,ind2) = double(V_polyFn.coefficient(k))/2;
+                M(ind2,ind1) = double(V_polyFn.coefficient(k))/2;
             end
 
             k = k+1;
@@ -549,23 +597,32 @@ function kappa = matrix_condition_number(A, norm_type)
 end
 
 %% Plotting functions
-function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling)
+function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling, projectionDims)
+    
+    if nargin < 4
+        projectionDims = [1 2];
+    end
+
     figure
     hold on;
     grid on; 
     axis equal;
     
+<<<<<<< HEAD
     for k=1:length(x_nom)
+=======
+    for k=1:1:size(x_nom,2)
+>>>>>>> unicycle
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
-        M_xy = project_ellipsoid_matrix(M, [1 2]);
-        center = x_nom(:,k);
+        M_xy = project_ellipsoid_matrix(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
         plotEllipse(center, M_xy)
     end 
     
     title('Invariant Ellipsoidal Sets along the nominal trajectory');
-    xlabel('p_x');
-    ylabel('p_y');
-    plot(x_nom(1,:),x_nom(2,:),'--b');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
 end
 
 function plotInitialSet(x_initial, initialEllipsoid)

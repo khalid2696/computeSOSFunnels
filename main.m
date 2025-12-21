@@ -9,11 +9,19 @@ clc; clearvars; close all;
 %% Add directories
 addpath('./lib/');
 
+<<<<<<< HEAD
 %% [INPUT] specify initial and final state: [pos_x, pos_y, theta]
 % Convention: theta = pi/2 -- North, 0 -- East
 
 initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
 finalState   = [2; 5; pi/2;];   % desired final state
+=======
+%% [INPUT] specify   initial and final state: [pos_x, pos_y, theta]
+% Convention: theta = pi/2 -- North, 0 -- East
+
+initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
+finalState   = [-2; 4; pi/2;];   % desired final state
+>>>>>>> unicycle
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
@@ -21,7 +29,7 @@ dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
 %% Compute a nominal trajectory and corresponding feedforward inputs
 
 maxTimeHorizon = 10;
-numTimeSteps = 25;         % number of time samples
+numTimeSteps = 40;         % number of time samples
 
 drawFlag = 0; %uncomment this if you want to plot results
 run("Step1_computeNominalTrajectory.m");
@@ -78,7 +86,11 @@ daspect([1 1 2]);
 %    disp(' ');
 %end
 
+<<<<<<< HEAD
 keyboard
+=======
+%keyboard
+>>>>>>> unicycle
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
@@ -89,13 +101,81 @@ run("Step3_getDeviationDynamics.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Time-conditioned invariant set analysis (with time-dependance)
+<<<<<<< HEAD
 disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 clearvars; close all; 
 %keyboard;
+=======
+
+% disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
+% clearvars; close all; 
+% 
+% % Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+% %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+% %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+% 
+% % hyperParameter sweep to find a good initial guess values for level set boundary value rho
+% rho0Max = 0.2; rho0NumVals = 10;
+% rho0Vals = linspace(1e-3, rho0Max, rho0NumVals); %rho0 = 0 doesn't make intuitive sense, hence a low value to begin with
+% 
+% cMax = 5; cNumVals = 2*cMax + 1;
+% cVals = linspace(-cMax, cMax, cNumVals);
+% 
+% drawFlag = 0;
+% usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
+% 
+% %2D struct array to store results from the hyperparameter sweep
+% resultStruct = struct('rho0', [], 'c', [], 'success', 0, 'inletVolume', [], 'outletVolume', []);
+% results = repmat(resultStruct, rho0NumVals, cNumVals);
+% 
+% %save the initialisation parameters
+% for i = 1:length(rho0Vals)
+%     for j = 1:length(cVals)
+%         results(i,j).rho0 = rho0Vals(i);
+%         results(i,j).c = cVals(j);
+%     end
+% end
+% 
+% for i = 1:length(rho0Vals)
+%     for j = 1:length(cVals)
+%         clearvars -except drawFlag usageMode rho0Vals cVals i j results
+%         close all;
+% 
+%         rhoInitialGuessConstant = rho0Vals(i);
+%         rhoInitialGuessExpCoeff = cVals(j);
+% 
+%         try                               
+%             run("Step4_computeTimeSampledInvarianceCertificates.m");
+%         catch
+%             disp('Could not find a successful initial guess to start the alternation scheme!');
+%             results(i,j).success = 0;
+% 
+%             break
+%         end
+% 
+%         %storing computed data of successful run for further analysis      
+%         results(i,j).success = 1;
+%         results(i,j).inletVolume = initialInletVolume;
+%         results(i,j).outletVolume = initialOutletVolume;
+% 
+%         results(i,j)
+%         %keyboard
+%     end
+% end
+
+% save('./precomputedData/hyperparamaterSweep.mat', 'rho0Vals', 'cVals', 'results');
+
+%% Run the SOS program (optimisation) once the feasibility check or hyperparameter sweep passes through
+
+close all
+drawFlag = 1; %change this to '0' if you don't want to plot results
+>>>>>>> unicycle
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
 
+<<<<<<< HEAD
 % Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
 % Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
@@ -113,18 +193,36 @@ end
 
 %optimize once the feasibility check passes through
 close all
+=======
+%best initialisation parameters after performing the sweep
+rhoInitialGuessConstant = 0.05; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
+                                % keep it greater than 0!
+rhoInitialGuessExpCoeff = 1; %[TUNEABLE] c: decrease value if initial guess fails
+%Note:
+%for "longer" trajectories,  rho0 = 0.05 and c = 1 or 1.5 seem to give a good feasible initial guess
+%for "shorter" trajectories, rho0 = 0.03 and c = 0 gives a feasible initial guess
+
+>>>>>>> unicycle
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
+<<<<<<< HEAD
 tic
+=======
+%tic
+>>>>>>> unicycle
 close all
 
 projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");
+<<<<<<< HEAD
 toc
+=======
+%toc
+>>>>>>> unicycle
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
 
 %startTimeIndex = 1;
