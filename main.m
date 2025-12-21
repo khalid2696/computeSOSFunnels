@@ -1,6 +1,6 @@
 clc; clearvars; close all;
 
-%keyboard
+keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
