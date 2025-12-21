@@ -57,14 +57,8 @@ goalScaling = 0.8;  %Keep it less than 1
 
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
-<<<<<<< HEAD
-% Exponentially evolving rho_guess
-% rhoGuess_k = rho_0 * exp(-c*(t_k - tf)/(t0 - tf)), 
-% t_k = tf --> rhoVal = rho_0; t_k = 0 --> rhoVal = (rho_0/e^c); 
-=======
 % Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
 % t_k = tf --> rhoVal = rho_0; t_k = t0 --> rhoVal = (rho_0*e^c); 
->>>>>>> unicycle
 
 %[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
 if ~exist('rhoInitialGuessConstant','var')
@@ -76,11 +70,7 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-<<<<<<< HEAD
-    rhoInitialGuessExpCoeff = 0.5;
-=======
     rhoInitialGuessExpCoeff = 2; %c
->>>>>>> unicycle
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -130,12 +120,9 @@ else
     error('Could not find a successful initial guess to start the alternation scheme!')
 end
 
-<<<<<<< HEAD
-=======
 initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
 initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
 
->>>>>>> unicycle
 if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
     return
 end
@@ -197,11 +184,7 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
-<<<<<<< HEAD
-        disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
-=======
 	disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
->>>>>>> unicycle
         disp(' ');
     end
 
@@ -228,7 +211,7 @@ for iter=1:maxIter
     %assigning values for next iteration
     prevRhoScaling = currRhoScaling;
     currRhoScaling = (1 + rhoStepUpValue)*prevRhoScaling;
-    %currRhoScaling = rhoScaleIncrements.*prevRhoScalintocg;
+    %currRhoScaling = rhoScaleIncrements.*prevRhoScaling;
 
     startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/(1 + rhoStepUpValue); %increasing the inlet volume
     
@@ -287,10 +270,6 @@ function [prog, sol_multipliersArray, infeasibilityStatus] = ...
     prog = sosprogram(xbar);
     
     for k = 2:1:N
-<<<<<<< HEAD
-    %parfor k = 2:N
-=======
->>>>>>> unicycle
         
         %sampling time - Ts
         deltaT = time_instances(k) - time_instances(k-1);
@@ -507,14 +486,8 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
             error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
         end
     
-<<<<<<< HEAD
-        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;    
-    end
-
-=======
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
     end
->>>>>>> unicycle
 end
 
 
@@ -608,11 +581,7 @@ function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling, projectionDims)
     grid on; 
     axis equal;
     
-<<<<<<< HEAD
-    for k=1:length(x_nom)
-=======
     for k=1:1:size(x_nom,2)
->>>>>>> unicycle
         M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
         M_xy = project_ellipsoid_matrix(M, projectionDims);
         center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';

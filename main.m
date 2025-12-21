@@ -9,19 +9,11 @@ clc; clearvars; close all;
 %% Add directories
 addpath('./lib/');
 
-<<<<<<< HEAD
-%% [INPUT] specify initial and final state: [pos_x, pos_y, theta]
-% Convention: theta = pi/2 -- North, 0 -- East
-
-initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
-finalState   = [2; 5; pi/2;];   % desired final state
-=======
 %% [INPUT] specify   initial and final state: [pos_x, pos_y, theta]
 % Convention: theta = pi/2 -- North, 0 -- East
 
 initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
 finalState   = [-2; 4; pi/2;];   % desired final state
->>>>>>> unicycle
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
@@ -86,11 +78,7 @@ daspect([1 1 2]);
 %    disp(' ');
 %end
 
-<<<<<<< HEAD
-keyboard
-=======
 %keyboard
->>>>>>> unicycle
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 
@@ -101,11 +89,6 @@ run("Step3_getDeviationDynamics.m");
 disp('- - - - - - -'); disp(" ");
 
 %% Time-conditioned invariant set analysis (with time-dependance)
-<<<<<<< HEAD
-disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
-clearvars; close all; 
-%keyboard;
-=======
 
 % disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
 % clearvars; close all; 
@@ -170,30 +153,10 @@ clearvars; close all;
 
 close all
 drawFlag = 1; %change this to '0' if you don't want to plot results
->>>>>>> unicycle
 
 %specify SOS program hyperparameters
 maxIter = 1; %maximum number of iterations
 
-<<<<<<< HEAD
-% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
-% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
-%             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
-%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
-rhoInitialGuessConstant = 0.05; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
-                                % keep it greater than 0!
-rhoInitialGuessExpCoeff = 2; %[TUNEABLE] c: increase value if initial guess fails
-
-usageMode = 'feasibilityCheck'; %run just for an initial feasibility check
-try                               
-    run("Step4_computeTimeSampledInvarianceCertificates.m");
-catch
-    disp('Could not find a successful initial guess to start the alternation scheme!');
-end
-
-%optimize once the feasibility check passes through
-close all
-=======
 %best initialisation parameters after performing the sweep
 rhoInitialGuessConstant = 0.05; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
@@ -202,27 +165,18 @@ rhoInitialGuessExpCoeff = 1; %[TUNEABLE] c: decrease value if initial guess fail
 %for "longer" trajectories,  rho0 = 0.05 and c = 1 or 1.5 seem to give a good feasible initial guess
 %for "shorter" trajectories, rho0 = 0.03 and c = 0 gives a feasible initial guess
 
->>>>>>> unicycle
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 
 disp('- - - - - - -'); disp(" ");
 
 %% [Optional] Plot computed funnels
-<<<<<<< HEAD
-tic
-=======
 %tic
->>>>>>> unicycle
 close all
 
 projectionDims_2D = [1 3]; projectionDims_3D = [1 2 3];
 run("./utils/plottingScript.m");
-<<<<<<< HEAD
-toc
-=======
 %toc
->>>>>>> unicycle
 %% [Optional] Verify the theoretical bounds (from SOS programming) with empirical bounds (using MC rollouts) 
 
 %startTimeIndex = 1;
