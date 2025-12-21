@@ -155,14 +155,14 @@ close all
 drawFlag = 1; %change this to '0' if you don't want to plot results
 
 %specify SOS program hyperparameters
-maxIter = 2; %maximum number of iterations
+maxIter = 1; %maximum number of iterations
 
 %best initialisation parameters after performing the sweep
 rhoInitialGuessConstant = 0.05; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
                                 % keep it greater than 0!
 rhoInitialGuessExpCoeff = 1; %[TUNEABLE] c: decrease value if initial guess fails
 %Note:
-%for "longer" trajectories,  rho0 = 0.05 and c = 1 or 2 seem to give a good feasible initial guess
+%for "longer" trajectories,  rho0 = 0.05 and c = 1 or 1.5 seem to give a good feasible initial guess
 %for "shorter" trajectories, rho0 = 0.03 and c = 0 gives a feasible initial guess
 
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!

@@ -64,7 +64,8 @@ disp(' ');
 
 %pre-computed polynomial-approximated dynamics (for quicker results)!!
 %variable name: taylor_approx (symbolic - nx1 matrix)
-load('./precomputedData/taylorApproxDynamicsSym.mat');
+%load('./precomputedData/taylorApproxDynamicsSym.mat');
+load('./precomputedData/taylorApprox_degree3.mat');
 
 %% Compute the polynomial-ized system dynamics at each nominal (state, input) pair
 
