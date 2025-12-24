@@ -12,7 +12,7 @@ This repository implements a modular pipeline to compute invariant funnels aroun
 
 ## 🚀 Key Features
 * **Trajectory Optimization:** Direct collocation (using IPOPT) to compute nominal trajectories and feedforward inputs.
-* **Feedback Control:** Synthesis of TVLQR gains ($K(t)$) and cost-to-go matrices ($P(t)$).
+* **Feedback Control:** Synthesis of TVLQR gains and cost-to-go matrices (useful in initializing the SOS Program).
 * **Taylor Approximation:** Automated symbolic expansion of nonlinear dynamics into polynomial form (required for SOS verification).
 * **Funnel Synthesis:** Bilinear alternation scheme to compute invariant funnels via SOS programming.
 * **Multi-System Support:** Ready-to-use implementations for:
