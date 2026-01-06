@@ -47,8 +47,35 @@ Open MATLAB and run `main.m`. The script handles path setup automatically.
     * Step 4: Compute SOS Funnels
 3.  Visualize results using `utils/plottingScript.m`.
 
+## 🤖 Supported Dynamical Systems
+
+This framework is designed to be modular, versatile, and system-agnostic. It is currently implemented and tested on three distinct nonlinear systems, each maintained on a separate branch to serve as a reference template.
+
+| System | Branch Name | Complexity | Description |
+| :--- | :--- | :--- | :--- |
+| **Unicycle** | `main` | 3 States, 2 Inputs | A non-holonomic mobile robot model (Default). |
+| **Cart-Pole** | `cartPole` | 4 States, 1 Input | A classic underactuated benchmark system. |
+| **Quadrotor** | `quadrotor` | 12 States, 4 Inputs | A high-dimensional system with complex nonlinear dynamics. |
+
+### Switching Systems
+To use a specific system, simply checkout the corresponding branch. For example, to use the quadrotor system:
+
+```bash
+git fetch origin
+git checkout quadrotor
+```
+
+## 📧 Contact & Support
+
+If you have questions about the codebase, installation issues, or encounter bugs, please **open a GitHub Issue** &mdash; this would allow the community to benefit from the discussions.
+
+For research inquiries, collaboration proposals, or theoretical questions regarding the Funnel Synthesis framework, feel free to reach out:
+
+> **Mohamed Khalid M Jaffar**  
+> 🌐 [khalid2696.github.io](https://khalid2696.github.io)
+
 ## 🖊️ Citation
-If you find this code useful in your research, please cite the software archived on Zenodo:
+If you find this code useful in your research, please cite the software:
 
 **BibTeX:**
 ```bibtex
