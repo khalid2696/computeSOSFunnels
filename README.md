@@ -72,8 +72,7 @@ If you have questions about the codebase, installation issues, or encounter bugs
 For research inquiries, collaboration proposals, or theoretical questions regarding the Funnel Synthesis framework, feel free to reach out:
 
 > **Mohamed Khalid M Jaffar**  
-> 🌐 [khalid2696.github.io](https://khalid2696.github.io)
-
+> 🌐 [khalid2696.github.io](https://khalid2696.github.io)  
 
 ## 🖊️ Citation
 If you find this code useful in your research, please cite the software:
