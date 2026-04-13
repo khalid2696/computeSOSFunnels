@@ -136,8 +136,6 @@ save('./precomputedData/LQRGainsAndCostMatrices.mat', 'K', 'P' , 'f_sym');
 disp('Saved the time-sampled LQR gains and cost-to-go matrices to a file!');
 disp(' ');
 
-clearvars;
-
 %% Function definitions
 
 %inputs 

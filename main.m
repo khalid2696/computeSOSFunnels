@@ -1,6 +1,5 @@
 clc; clearvars; close all;
 
-keyboard
 %parpool; %initialise parallel processing %if clusters available and toolboox installed
 
 %Note: Not defining input-parameters in these files WILL NOT lead to errors 
@@ -14,12 +13,8 @@ addpath('./lib/');
 %% [INPUT] specify initial and final state: [pos, vel, theta, omega]
 % Convention: theta = 0 -- vertically down (stable), theta = pi -- vertically up (unstable) 
 
-
-initialState = [0; 0; 0; 0;];  % initial state: at origin, vertically down
-finalState   = [3; 0; 0; 0;];  % desired final state
-
-%modify lines 65-67 of ./lib/getNominalTrajectory_using_DirectCollocation.m to impose 
-%theta constraints accordingly (based on whether it's upright or hanging down)
+initialState = [0; 0; pi; 0;];  % initial state: at origin, vertically down
+finalState   = [3; 0; pi; 0;];  % desired final state
 
 %% Specify Cart-Pole Parameters (not defining these will result in an error)
 
@@ -83,32 +78,32 @@ load('./precomputedData/LQRGainsAndCostMatrices.mat');
 % end
 % 
 % keyboard;
-%% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
-
-close all; clearvars;
-
-numSamples = 250;
-startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1e-1; %a measure of max initial perturbations to state
-                         %decrease this for a smaller initial set
-upsamplingFactor = 1; %finer discretization to prevent integration error build-up
-                       %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
-
-run("./utils/checkClosedLoop_MCRollouts.m");
-drawnow
-
-% for k = 1:50
+% %% Additionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 % 
-%     startTimeIndex = k
-%     startMaxPerturbation = 0.05;
+% close all; clearvars;
 % 
-%     clearvars -except startMaxPerturbation startTimeIndex
+% numSamples = 250;
+% startTimeIndex = 1; %start time for the rollouts
+% startMaxPerturbation = 1e-1; %a measure of max initial perturbations to state
+%                          %decrease this for a smaller initial set
+% upsamplingFactor = 1; %finer discretization to prevent integration error build-up
+%                        %finer num of samples = upsamplingFactor*numTimeSamples (temporarily)
 % 
-%     run("./utils/checkClosedLoop_MCRollouts.m");
-%     drawnow
-% end
+% run("./utils/checkClosedLoop_MCRollouts.m");
+% drawnow
 % 
-keyboard
+% % for k = 1:50
+% % 
+% %     startTimeIndex = k
+% %     startMaxPerturbation = 0.05;
+% % 
+% %     clearvars -except startMaxPerturbation startTimeIndex
+% % 
+% %     run("./utils/checkClosedLoop_MCRollouts.m");
+% %     drawnow
+% % end
+% % 
+% keyboard
 %% [Optional] Load all the saved files for further analysis
 
 % clearvars; close all;
@@ -127,8 +122,6 @@ keyboard
 % daspect([1 1 0.5]);
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
-
-clearvars
 
 order = 3; %order of Taylor expansion
 run("Step3_getDeviationDynamics.m");
