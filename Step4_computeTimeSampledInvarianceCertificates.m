@@ -184,8 +184,8 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
-	disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
-        disp(' ');
+	% disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+    %     disp(' ');
     end
 
     if ~infeasibilityStatus
@@ -218,7 +218,6 @@ for iter=1:maxIter
     candidateV = sol_candidateVArray;
 
     drawnow;
-    iter
     %keyboard;
     
 end
