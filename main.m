@@ -54,9 +54,10 @@ close all;
 startTimeIndex = 1; %start time for the rollouts
 startMaxPerturbation = 1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-%run("./utils/checkClosedLoop_MCRollouts.m");
+run("./utils/checkClosedLoop_MCRollouts.m");
 %keyboard
 
+return
 %% [Optional] Load all the saved files for further analysis
 
 clearvars; close all;

@@ -1,4 +1,4 @@
-%clc; clearvars; close all
+% clc; clearvars; close all
 
 %% Add directories
 addpath('../lib/');
@@ -35,6 +35,8 @@ else
     rho0 = 0.3; %decrease this for a smaller initial set
 end
 
+%re-initializing function handle to prevent look-up/out of scope errors
+dynamicsFnHandle = @(x,u) unicycle_dynamics(x, u);
 %% Monte Carlo forward rollouts
 
 % a scaling to vary initial set size based on the time it starts
@@ -122,12 +124,21 @@ clearvars;
 
 %% Function defintions
 
+function f = unicycle_dynamics(x, u)
+
+    % Unicycle dynamics: x_dot = f(x, u)
+    f = [u(1) * cos(x(3)); ...  % x_dot
+         u(1) * sin(x(3)); ...  % y_dot
+         u(2)];                % theta_dot
+end
+
 function initial_states = sample_initial_states(mean_state, covariance, num_samples)
     % Samples initial states from an ellipsoid
     initial_states = mvnrnd(mean_state, covariance, num_samples)';
 end
 
 function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynamics, x0, x_nom, u_nom, K, P, time, dt, method)
+
     % Simulates the unicycle dynamics under TVLQR control
     x_traj = zeros(size(x_nom));
     x_traj(:, 1) = x0;
@@ -142,7 +153,7 @@ function [x_traj, total_input, errorNorm, costToGoal] = forward_propagate(dynami
         % Propagate dynamics
         if strcmpi(method,'Euler')
             %Simpler Euler integration -- for speed
-            dx = dynamics(x_traj(:, k), u_k);
+            dx = @(x,u) dynamics(x_traj(:, k), u_k);
             x_traj(:, k+1) = x_traj(:, k) + dt * dx;
         elseif strcmpi(method,'trapezoidal')
             % Trapezoidal integration -- for accuracy and speed
