@@ -1,0 +1,734 @@
+%clc; clearvars; close all
+warning('off','MATLAB:singularMatrix');
+
+% ========================================================================
+% Lines/blocks tagged [RETROFIT] are the only changes from the original.
+% Search for "[RETROFIT]" to scan them.
+% ========================================================================
+
+%% Loading the time instances, nominal trajectory, nominal input and feedback control gain
+
+load('../precomputedData/nominalTrajectory.mat');
+load('../precomputedData/LQRGainsAndCostMatrices.mat');
+load('../precomputedData/deviationDynamics.mat');
+
+if ~exist('drawFlag','var')
+    drawFlag = 1; %by default, plot the results
+end
+
+usageMode = 'shapeOptimisation';
+
+%% Status message
+%Quantities at our disposal now
+
+% N                  : number of time samples                   : scalar N
+% time_instances     : time horizon (sampled)                   : 1 x N
+% x_nom              : nominal state trajectory                 : n_x x N
+% u_nom              : feedforward input tape                   : n_u x N
+% K                  : Feedback gains (sampled)                 : n_u x n_x x N
+% P                  : cost-to-goal matrix (sampled)            : n_x x n_x x N
+% xbar               : pvar type state deviations               : n_x x 1 
+% systemPolyDynamics : polynomialised system dynamics (sampled) : 1 x N cell 
+% deviationDynamics  : state deviation dynamics (sampled)       : 1 x N cell
+
+%Note: cost-to-go matrices, P will be used for candidate Lyapunov functions
+%Warning: systemPolyDynamics may not be useful because it's in terms of syms type variables 
+
+N = length(time_instances);
+n = size(x_nom, 1); m = size(u_nom, 1); %state and input vector dimensionality
+
+%% Hyper-parameters
+
+% 1. Parameters pertaining to SOS Programming
+options.solver = 'mosek'; %behind-the-scenes SDP solver of choice
+                          %options -- mosek/sedumi
+if ~exist('multiplierPolyDeg','var'),    multiplierPolyDeg = 6;       end  % [RETROFIT] overridable (deg lambda_k)
+LyapunovFnDeg = 2;     %quadratic Lyapunov function
+tolerance = 1e-6;
+if ~exist('convergenceTolerance','var'), convergenceTolerance = 5e-2; end  % [RETROFIT] delta (now actually used)
+if ~exist('captureSolverLog','var'),     captureSolverLog = true;     end  % [RETROFIT] parse MOSEK problem size
+options.captureLog = captureSolverLog;                                     % [RETROFIT]
+
+% 2. Parameters pertaining to Alternation Scheme (SCP) -- feasibility step and optimisation step             
+if ~exist('maxIter','var')
+    maxIter = 20; %maximum number of iterations                            % [RETROFIT] j_max = 20 (was 3)
+end
+if ~exist('rhoStepUpValue','var'),       rhoStepUpValue = 0;          end  % [RETROFIT] keep 0 (matches paper)
+
+% 3. Parameters pertaining to defining terminal set/goal region
+startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
+                    %decrease if computed funnel is weirdly shaped
+goalScaling = 0.8;  %Keep it less than 1
+
+
+% 4. Parameters pertaining to initial guess of level-set boundary value, rho
+% Exponentially evolving rho_guess: rhoGuess_k = rho_0 * exp(c*(t_k - tf)/(t0 - tf)) 
+% t_k = tf --> rhoVal = rho_0; t_k = t0 --> rhoVal = (rho_0*e^c); 
+
+%[TUNEABLE] rho_0: decrease value if initial guess fails, keep it greater than 0!
+if ~exist('rhoInitialGuessConstant','var')
+    rhoInitialGuessConstant = 0.05; %rho_0
+end 
+
+%[TUNEABLE] c: decrease value if initial guess fails
+% Usage note: c > 0 --> exp decreasing rho_guess (shrinking funnel -- preferred)
+%             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
+%             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
+if ~exist('rhoInitialGuessExpCoeff','var')
+    rhoInitialGuessExpCoeff = 1; %c
+end
+
+%% [RETROFIT] Metric helpers and a fresh run log
+omega_n   = pi^(n/2)/gamma(n/2+1);                        % volume of unit ball in R^n
+logdetSPD = @(A) 2*sum(log(diag(chol((A+A')/2))));        % stable log-det for SPD matrices
+setVol    = @(A) omega_n*exp(-0.5*logdetSPD(A));          % vol{ xbar : xbar'*A*xbar <= 1 }
+dT        = time_instances(2) - time_instances(1);        % uniform knot spacing
+
+runLog = struct('status','running', 'rho_g',rhoInitialGuessConstant, 'c',rhoInitialGuessExpCoeff, ...
+                'degLambda',multiplierPolyDeg, 'K',N-1, 'n',n, 'deltaT',dT, ...
+                'J0',NaN, 'funnelVol0',NaN, ...
+                'J',[], 'funnelVol',[], 'inletVol',[], 'outletVol',[], ...
+                'tL',[], 'tV',[], 'cpuL',[], 'cpuV',[], 'sizeL',[], 'sizeV',[], ...
+                'iters',0, 'converged',false, 'tTotal',NaN);
+% sizeL/sizeV rows: [constraints, scalar vars, matrix (PSD) vars, scalarized PSD entries] from MOSEK
+
+%% Get the scaling for initial guess of level set boundary value, rho
+
+[rhoInitialGuess, candidateV] = getInitialRhoGuessAndCandidateV (time_instances, xbar, deviationDynamics, P, ...
+                                                                    rhoInitialGuessConstant, rhoInitialGuessExpCoeff);
+ellipsoidMatrices = P; %initial guess of ellipsoid matrices are the cost-to-go matrices from TVLQR
+
+% [RETROFIT] objective and funnel volume of the initial guess (iteration iter = 0, for Fig. 4)
+runLog.J0         = sum(rhoInitialGuess);
+runLog.funnelVol0 = dT*sum(arrayfun(@(k) setVol(P(:,:,k)/rhoInitialGuess(k)), 1:N));
+
+%% Define the intial and final regions
+
+if exist('fixedRegions','var')                                            % [RETROFIT] fixed regions for all
+    startRegionEllipsoidMatrix = fixedRegions.M_I;                        %   experiments after the default run
+    goalRegionEllipsoidMatrix  = fixedRegions.M_T;
+else
+    goalRegionEllipsoidMatrix = goalScaling*P(:,:,end)/rhoInitialGuess(end);
+    startRegionEllipsoidMatrix = (1/startScaling)*P(:,:,1)/rhoInitialGuess(1);
+end
+if exist('inletScale','var')                                              % [RETROFIT] P4: E_I -> s*E_I
+    startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/inletScale^2;
+end
+
+% [RETROFIT] region bookkeeping
+runLog.M_I               = startRegionEllipsoidMatrix;
+runLog.M_T               = goalRegionEllipsoidMatrix;
+runLog.regionsConvergent = min(eig(goalRegionEllipsoidMatrix - startRegionEllipsoidMatrix)) >= -1e-9; % M_I <= M_T
+runLog.ratioFloor        = sqrt(det(goalRegionEllipsoidMatrix)/det(startRegionEllipsoidMatrix));     % vol(E_I)/vol(E_T)
+runLog.inletVolInput     = setVol(startRegionEllipsoidMatrix);
+runLog.outletVolInput    = setVol(goalRegionEllipsoidMatrix);
+% does the GUESS satisfy inlet/outlet containment? (labels infeasible cells: C = containment, I = invariance)
+runLog.guessInletOK  = max(real(eig(P(:,:,1)/rhoInitialGuess(1), startRegionEllipsoidMatrix))) <= 1 + 1e-9;
+runLog.guessOutletOK = max(real(eig(goalRegionEllipsoidMatrix, P(:,:,end)/rhoInitialGuess(end)))) <= 1 + 1e-9;
+
+%% Plot guess funnel and start/end regions
+
+% if drawFlag
+%     plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+%     title('Initial guess funnel');
+%     plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+%     plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+% end
+
+%% The first feasibility check to see whether we're able to find polynomial Lagrange multipliers at all time instances (for our guessV and guessRho) 
+
+[~, ~, infeasibilityStatus] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoInitialGuess, ...
+                                                                        startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
+                                                                          multiplierPolyDeg, options, tolerance);
+
+if drawFlag
+    plotFunnel(x_nom, ellipsoidMatrices, rhoInitialGuess);
+    plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+    plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+
+    if ~infeasibilityStatus
+        title('Initial guess V and rho scaling (feasible)');
+    else
+        title('Initial guess V and rho scaling (infeasible)');
+    end
+end
+% disp(rhoInitialGuess');
+
+if ~infeasibilityStatus
+    disp('Feasibility check passed for given rho guess..');
+else
+    if runLog.guessInletOK && runLog.guessOutletOK                        % [RETROFIT] label failure type
+        runLog.status = 'infeasible_I';
+    else
+        runLog.status = 'infeasible_C';
+    end
+    error('Could not find a successful initial guess to start the alternation scheme!')
+end
+
+initialInletVolume  = 1/sqrt(det((ellipsoidMatrices(:,:,1)/rhoInitialGuess(1))));
+initialOutletVolume = 1/sqrt(det((ellipsoidMatrices(:,:,end)/rhoInitialGuess(end))));
+
+if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
+    return
+end
+
+%% Alternation Loop -- proceed if we're able to get a feasible initial guess
+
+currRhoScaling = rhoInitialGuess;
+prevRhoScaling = NaN(size(time_instances)); %NaN values to start the iterations
+tLoop = tic;                                                              % [RETROFIT]
+
+for iter=1:maxIter
+    
+    %clc
+    % ------ L-Step: Finding polynomial Lagrange multipliers  ------ %
+    % Feasibility check to see whether we're able to determine multiplier terms 
+    % at all time instances for a given guess of level-set boundary (rho) values and candidate V 
+    t0 = tic;                                                             % [RETROFIT]
+    [~, multiplierTerms, infeasibilityStatus, infoL] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, currRhoScaling, ...
+                                                                            startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
+                                                                              multiplierPolyDeg, options, tolerance);
+    runLog.tL(iter) = toc(t0); runLog.cpuL(iter) = infoL.cpusec; runLog.sizeL(iter,:) = infoL.problemSize; % [RETROFIT]
+ 
+    if ~infeasibilityStatus
+        disp('Feasibility-check step: passed'); disp(' ');
+    end
+
+    if infeasibilityStatus
+        runLog.status = sprintf('stopped_L_infeasible_j%d', iter);       % [RETROFIT] should never happen for iter >= 2
+        if iter == 1
+            error('Could not find a successful initial guess to start the alternation scheme!')
+        else
+            disp('Infeasibility! Exiting the alternation scheme..')
+            disp(' ');
+            iter
+            break
+        end
+    end
+
+    feasibleMultiplierTerms = multiplierTerms;
+    %keyboard
+    
+    % ------ V-step: Finding Lyapunov function & level-set boundary value ------ %
+    % Optimising the level-set volume through level-set boundary (rho) values and Lyapunov functions V
+    % at all time instances, for the feasible multipliers obtained in the previous step 
+    t0 = tic;                                                             % [RETROFIT]
+    [~, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus, infoV] = ...
+                                  findLyapFnAndLevelSetValues(time_instances, xbar, deviationDynamics, candidateV, multiplierTerms, ...
+                                                                startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
+                                                                   LyapunovFnDeg, options, tolerance); 
+    runLog.tV(iter) = toc(t0); runLog.cpuV(iter) = infoV.cpusec; runLog.sizeV(iter,:) = infoV.problemSize; % [RETROFIT]
+
+    if infeasibilityStatus
+        runLog.status = sprintf('stopped_V_infeasible_j%d', iter);       % [RETROFIT]
+        disp('Infeasibility! Exiting the alternation scheme..')
+        disp(' ');
+        iter
+        break
+    end
+    
+    % Extracting the solutions and converting to Matrix format
+    ellipsoidMatrices = NaN(n,n,length(time_instances));
+    currRhoScaling = NaN(size(time_instances));
+    
+    for k=1:length(time_instances)
+        V_polyFn = sol_candidateVArray{k};
+        ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
+        currRhoScaling(k) = sol_rhoValsArray{k};
+
+	% disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+    %     disp(' ');
+    end
+
+    % [RETROFIT] per-iteration metrics: objective, funnel volume (eq:approximate_funnel_volume), inlet/outlet volumes
+    volk = arrayfun(@(k) setVol(ellipsoidMatrices(:,:,k)/currRhoScaling(k)), 1:N);
+    runLog.J(iter)         = sum(currRhoScaling);
+    runLog.funnelVol(iter) = dT*sum(volk);
+    runLog.inletVol(iter)  = volk(1);
+    runLog.outletVol(iter) = volk(end);
+    runLog.knotVol         = volk;          % volumes per knot of the latest iterate
+    runLog.iters           = iter;
+
+    if ~infeasibilityStatus
+        disp('Optimisation step: passed'); disp(' ');
+        
+        if drawFlag
+            plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
+            plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
+            plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+        end
+
+        title('Optimised funnel certificate');
+        
+        % display some volumetric properties                              % [RETROFIT] true volumes (include omega_n)
+        fprintf('iter = %d | J = %.6g | funnel vol = %.6g | inlet vol = %.6g (input %.6g) | outlet vol = %.6g (input %.6g)\n\n', ...
+                iter, runLog.J(iter), runLog.funnelVol(iter), volk(1), runLog.inletVolInput, volk(end), runLog.outletVolInput);
+    end
+
+    % [RETROFIT] stopping rule: relative decrease of the objective below delta
+    if iter > 1 && (runLog.J(iter-1) - runLog.J(iter))/runLog.J(iter-1) < convergenceTolerance
+        runLog.converged = true;
+        prevRhoScaling = currRhoScaling;
+        candidateV = sol_candidateVArray;
+        break
+    end
+
+    %assigning values for next iteration
+    prevRhoScaling = currRhoScaling;
+    currRhoScaling = (1 + rhoStepUpValue)*prevRhoScaling;
+    %currRhoScaling = rhoScaleIncrements.*prevRhoScaling;
+
+    startRegionEllipsoidMatrix = startRegionEllipsoidMatrix/(1 + rhoStepUpValue); %increasing the inlet volume (no-op for rhoStepUpValue = 0)
+    
+    candidateV = sol_candidateVArray;
+
+    drawnow;
+    %keyboard;
+    
+end
+runLog.tTotal = toc(tLoop);                                               % [RETROFIT]
+if strcmp(runLog.status, 'running'), runLog.status = 'done'; end         % [RETROFIT]
+
+%% Display some relevant metrics                                          % [RETROFIT] uses final certified iterate (prevRhoScaling)
+
+rhoFinal = prevRhoScaling;
+runLog.P   = ellipsoidMatrices;      % paper: P_k
+runLog.rho = rhoFinal;               % paper: rho_k
+if all(isfinite(rhoFinal))
+    inletVolFinal  = setVol(ellipsoidMatrices(:,:,1)/rhoFinal(1));
+    outletVolFinal = setVol(ellipsoidMatrices(:,:,end)/rhoFinal(end));
+    runLog.inletRatio  = inletVolFinal/runLog.inletVolInput;    % should be >= 1
+    runLog.outletRatio = outletVolFinal/runLog.outletVolInput;  % should be <= 1
+    runLog.inOutRatio  = inletVolFinal/outletVolFinal;          % compare against runLog.ratioFloor
+    fprintf('status = %s | iters = %d | converged = %d\n', runLog.status, runLog.iters, runLog.converged);
+    fprintf('inlet/E_I = %.4f (>= 1) | outlet/E_T = %.4g (<= 1) | inlet/outlet = %.4g (floor %.4g)\n', ...
+            runLog.inletRatio, runLog.outletRatio, runLog.inOutRatio, runLog.ratioFloor);
+end
+%% Status message
+
+disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
+disp(' ');
+
+%% Save the multipliers, candidate V and level-set boundary value to a file
+
+rhoScaling = prevRhoScaling;
+multiplierTerms = feasibleMultiplierTerms;
+inletRegion = startRegionEllipsoidMatrix;
+outletRegion = goalRegionEllipsoidMatrix;
+save('../precomputedData/setInvarianceCertificates.mat', 'time_instances', 'candidateV', 'rhoScaling', 'ellipsoidMatrices', 'inletRegion', 'outletRegion', 'multiplierTerms');
+
+disp('Saved the time-sampled ellipsoidal matrices parametrizing the invariant sets to a file!');
+disp(' ');
+
+%% ---------------------  Function definitions  ----------------------------
+
+%% SOS Program Functions -- the two alternating steps
+
+function [prog, sol_multipliersArray, infeasibilityStatus, sol_info] = ...   % [RETROFIT] returns sol_info
+    findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, rhoGuess, M_i, M_f, ...
+                              multiplierPolyDeg, options, tolerance)
+    
+    N = length(time_instances);
+    
+    %N-1 decision polynomial terms: multipliers(k)
+    lagrangeMultipliers = cell(N+1,1);  %this'll hold the SOS vars  (before solving) 
+    sol_multipliersArray = cell(N+1,1); %this'll hold the solutions (after solving)
+
+    infeasibilityStatus = 0;
+
+    %initialise the SOS program
+    prog = sosprogram(xbar);
+    
+    for k = 2:1:N
+        
+        %sampling time - Ts
+        deltaT = time_instances(k) - time_instances(k-1);
+        
+        %calculate Vdot
+        fbar = deviationDynamics{k};
+        V = candidateV{k};
+        partial_dVdt = (candidateV{k} - candidateV{k-1})/deltaT;
+        Vdot = partial_dVdt + jacobian(V, xbar)*fbar; 
+        
+        %determine rho and rhoDot
+        rho = rhoGuess(k);
+        rhoDot = (rhoGuess(k) - rhoGuess(k-1))/deltaT;
+        %rhoDot = rhoDotArray(k);
+
+        %multiplier polynomial
+        [prog, sL] = sospolyvar(prog,monomials(xbar,0:multiplierPolyDeg));
+        lagrangeMultipliers{k} = sL;
+        %or alternatively
+        %[prog, s1] = sossosvar(prog,monomials(x,0:multiplierPolyDeg/2));
+        %(USE ONLY FOR ROA! NOT FOR INVARIANT SET COMPUTATION)
+
+        % SOS constraints
+
+        % 1. Positive definiteness of V (taken care by construction of V)
+        prog = sosineq(prog, V - tolerance*(xbar'*xbar)); 
+    
+        % 2. Vdot constraint (generalised S-procedure)
+        prog = sosineq(prog, (rhoDot - Vdot) - sL*(rho - V) - tolerance*(xbar'*xbar));
+
+        % 3. non-negativity of multiplier polynomial (USE ONLY FOR ROA! NOT FOR INVARIANT SET COMPUTATION)
+        %prog = sosineq(prog, s1);
+    end
+    
+    % 4. Inlet constraints -- inlet set contains the user-defined initial set
+    outerEllipsoidCondition = rhoGuess(1) - candidateV{1};
+    innerEllipsoidCondition = 1 - xbar'*M_i*xbar; %given initial (ellipsoid) set
+    
+    [prog,s0] = sossosvar(prog,1); %scalar multiplier
+    lagrangeMultipliers{1} = s0;
+    prog = sosineq(prog, outerEllipsoidCondition - s0*innerEllipsoidCondition);    
+    
+    % 5. Outlet constraints -- outlet set contained within the user-defined final set
+    outerEllipsoidCondition = 1 - xbar'*M_f*xbar; %given final (ellipsoid) set
+    innerEllipsoidCondition = rhoGuess(end) - candidateV{end}; 
+    
+    [prog,sN] = sossosvar(prog,1); %scalar multiplier
+    lagrangeMultipliers{end} = sN;
+    prog = sosineq(prog, outerEllipsoidCondition - sN*innerEllipsoidCondition - tolerance*(xbar'*xbar));  
+
+    % Solve the feasibility program
+    [prog, sol_info] = solveAndLog(prog, options);                        % [RETROFIT] was: sossolve(prog, options)
+    
+    if (sol_info.dinf==1) || (sol_info.pinf==1) || sol_info.feasratio < 0
+        %disp('Infeasible! Change rho guess value..');
+        %disp(' '); 
+        infeasibilityStatus = 1;
+        return
+    end
+
+    %extract the solution and store it in a cell array
+    for k= 2:1:N+1
+        temp_sol = sosgetsol(prog,lagrangeMultipliers{k});
+        %temp_sol = temp_sol/max(temp_sol.coefficient); %normalise the coefficients
+        %temp_sol = cleanpoly(temp_sol, tolerance); %clean up the terms (remove coefficients smaller than tolerance)
+        
+        sol_multipliersArray{k} = temp_sol;
+    end
+end
+
+
+function [prog, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus, sol_info] = ...   % [RETROFIT] returns sol_info
+    findLyapFnAndLevelSetValues(time_instances, xbar, deviationDynamics, Vguess, multiplierTerms, ...
+                                M_i, M_f, LyapunovFnDeg, options, tolerance)
+    
+    N = length(time_instances);
+    
+    %N decision scalar variables: rho(k)
+    rhoValArray = cell(N,1);      %this'll hold the SOS vars  (before solving)
+    sol_rhoValsArray = cell(N,1); %this'll hold the solutions (after solving)
+
+    %N decision scalar variables: rho(k)
+    candidateVArray = cell(N,1);      %this'll hold the SOS vars  (before solving)
+    sol_candidateVArray = cell(N,1);  %this'll hold the solutions (after solving)
+
+    infeasibilityStatus = 0;
+
+    %initialise the SOS program with indeterminates
+    prog = sosprogram(xbar);
+    
+    %getting stuff ready
+    for k = 1:N
+        [prog, rho] = sossosvar(prog,1);
+        rhoValArray{k} = rho;
+
+        [prog, V] = sospolyvar(prog,monomials(xbar,2:LyapunovFnDeg));
+        candidateVArray{k} = V;
+    end
+    
+    %imposing SOS constraints
+    % 1. Positive definiteness of V at index 1
+    prog = sosineq(prog, candidateVArray{1} - tolerance*(xbar'*xbar));
+
+    objective = 0;
+    objective = objective + rhoValArray{1}; %include rho corresponding to inlet
+    for k = 2:1:N
+        
+        deltaT = time_instances(k) - time_instances(k-1);
+
+        fbar = deviationDynamics{k};
+
+        V = candidateVArray{k};
+        partial_dVdt = (1/deltaT)*(candidateVArray{k} - candidateVArray{k-1}); 
+        Vdot = partial_dVdt + jacobian(V, xbar)*fbar; 
+        
+        rho = rhoValArray{k};
+        rhoDot = (1/deltaT)*(rhoValArray{k} - rhoValArray{k-1});
+        %SOSTOOLS seems to work only with multiplication operator and not
+        %division for 'dpvars', hence, 1/deltaT*(..) instead of (..)/deltaT !
+
+        %SOS Constraints
+        % 1. Positive definiteness of V (should be taken care by construction of V)
+        prog = sosineq(prog, V - tolerance*(xbar'*xbar));
+    
+        % 2. Vdot constraint (generalised S-procedure)
+        sL = multiplierTerms{k};
+        prog = sosineq(prog, (rhoDot - Vdot) - sL*(rho - V) - tolerance*(xbar'*xbar));
+
+        %Objective function
+        objective = objective + rho;
+    end
+
+    % 3. Normalisation of coefficients of V (sum of coefficients is same as the guessed Lyapunov function (from prev step))
+    for k = 1:N
+        %prog = soseq(prog, subs(V,xbar,ones(size(xbar))) - 1);
+        prog = soseq(prog, subs(candidateVArray{k},xbar,ones(size(xbar))) - subs(Vguess{k},xbar,ones(size(xbar))));
+    end
+
+    % 4. Inlet constraints -- inlet set contains the user-defined initial set
+    outerEllipsoidCondition = rhoValArray{1} - candidateVArray{1};
+    innerEllipsoidCondition = 1 - xbar'*M_i*xbar; %given initial (ellipsoid) set
+    
+    [prog,s0] = sossosvar(prog,1); %scalar multiplier
+    prog = sosineq(prog, outerEllipsoidCondition - s0*innerEllipsoidCondition - tolerance*(xbar'*xbar));    
+    
+    % 5. Outlet constraints -- outlet set contained within the user-defined final set
+    outerEllipsoidCondition = 1 - xbar'*M_f*xbar; %given final (ellipsoid) set
+    innerEllipsoidCondition = rhoValArray{end} - candidateVArray{end}; 
+ 
+    sN = multiplierTerms{end};
+    prog = sosineq(prog, outerEllipsoidCondition - sN*innerEllipsoidCondition - tolerance*(xbar'*xbar));  
+ 
+    %inner ellipse condition implies the outer one
+    %so the polynomial largrange term gets multiplied to the inner condition 
+
+    %alternative objective -- just minimise the outlet region
+    %objective = rhoValArray{N}; 
+
+    %Set the objective
+    prog = sossetobj(prog, objective); % Objective: minimise sum of rho (hence positive sign)
+    
+    % Solve the SOS program
+    [prog, sol_info] = solveAndLog(prog, options);                        % [RETROFIT] was: sossolve(prog, options)
+    
+    if (sol_info.dinf==1) || (sol_info.pinf==1) || sol_info.feasratio < 0
+        infeasibilityStatus = 1;
+        %disp('Infeasible problem!');
+        %disp(' ');
+        return
+    end
+
+    % Extract the results from solved SOS Program and store it in a cell array
+    for k= 1:1:N      
+        temp_rhoSol = double(sosgetsol(prog, rhoValArray{k}));
+        sol_rhoValsArray{k} = temp_rhoSol;
+        
+        temp_VSol = sosgetsol(prog, candidateVArray{k});
+        sol_candidateVArray{k} = temp_VSol;
+    end
+    
+    %scaling the coefficients of V and rho by the same factor
+    %for k= 1:1:N
+    %    sol_candidateVArray{k} = temp_VSol/sol_rhoValsArray{end};
+    %    sol_rhoValsArray{k} = sol_rhoValsArray{k}/sol_rhoValsArray{end};
+    %end
+end
+
+
+%% [RETROFIT] Solver wrapper: solves, and optionally parses the MOSEK problem summary
+
+function [prog, sol_info] = solveAndLog(prog, options)
+    captureLog = isfield(options,'captureLog') && options.captureLog;
+    solverOpts = options;
+    % Suppress solver logs (solver info)
+    if isfield(solverOpts,'captureLog'), solverOpts = rmfield(solverOpts,'captureLog'); end
+
+    if captureLog
+        solverText = evalc('[prog, sol_info] = sossolve(prog, solverOpts);');
+        sol_info.problemSize = parseMosekSize(solverText);
+    else
+        [prog, sol_info] = sossolve(prog, solverOpts);
+        sol_info.problemSize = NaN(1,4);
+    end
+end
+
+function sz = parseMosekSize(txt)
+    % [constraints, scalar vars, matrix (PSD) vars, scalarized PSD entries] from the first 'Problem' block
+    sz = NaN(1,4);
+    t = regexp(txt, 'Constraints\s*:\s*(\d+)', 'tokens', 'once');
+    if ~isempty(t), sz(1) = str2double(t{1}); end
+    t = regexp(txt, 'Scalar variables\s*:\s*(\d+)', 'tokens', 'once');
+    if ~isempty(t), sz(2) = str2double(t{1}); end
+    t = regexp(txt, 'Matrix variables\s*:\s*(\d+)\s*\(scalarized:\s*(\d+)\)', 'tokens', 'once');
+    if ~isempty(t), sz(3) = str2double(t{1}); sz(4) = str2double(t{2}); end
+end
+
+
+%% Helper functions
+
+function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances, xbar, deviationDynamics, costToGoMatrices, rho_0, c)
+    
+    N = length(time_instances);
+    t0 = time_instances(1); tf = time_instances(N);
+    
+    rhoGuess = NaN(size(time_instances));
+    candidateV = cell(size(time_instances));
+    
+    % Defining a quadratic lyapunov function initial candidate, V = xbar^T P xbar
+    % xbar = x - x_nom; %state deviations *off* the nominal trajectory
+    for k = 1:N
+        tk = time_instances(k);
+        
+        rhoGuess(k) = rho_0 * exp(c*(tk - tf)/(t0 - tf));
+
+        %getting some initial Lyapunov candidates
+        f = deviationDynamics{k};
+        A = jacobian(f,xbar); %symbolic A matrix
+        A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
+        
+        if ~all(real(eig(A_at_origin)) < 0)
+            disp(k); disp(eig(A_at_origin));
+            disp('Nominal trajectory cannot be determined to be stable using indirect Lyapunov method');  
+            error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
+        end
+    
+        candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
+    end
+end
+
+
+function M = getEllipsoidMatrix_nD(V_polyFn, n)
+    
+    %for some reason, SOSTOOLS orders the monomials in this particular
+    %lexicographic order, 10 12 12 before 2, 21 22 .. before 3, and so on
+    %so using that order to retrieve the coefficients and save it
+    
+    % Convert numbers to strings for lexicographic sorting
+    indices = 1:n;
+    stringIndices = arrayfun(@num2str, indices, 'UniformOutput', false);
+    
+    % Sort strings lexicographically
+    [~, sorted_indices] = sort(stringIndices);
+    indexKeySequence = indices(sorted_indices);
+
+    %indexKeySequence = [1 2 3];
+
+    M = NaN(n); %empty nxn matrix to hold the ellipsoid matrix
+    
+    if length(V_polyFn.coefficient) <  n*(n-1)/2
+        return %if we're missing some coefficients the following algorithm can't work out
+    end        % n(n-1)/2 is the number of elements in an upper triangle matrix
+
+    k = 1;
+    for i=1:n
+        for j=i:n
+            ind1 = indexKeySequence(i); ind2 = indexKeySequence(j); %retrieve the index specific for this decomposition
+            if ind1 == ind2 %diagonal terms
+                M(ind1,ind2) = double(V_polyFn.coefficient(k));
+            else      %off-diagonal terms
+                M(ind1,ind2) = double(V_polyFn.coefficient(k))/2;
+                M(ind2,ind1) = double(V_polyFn.coefficient(k))/2;
+            end
+
+            k = k+1;
+        end
+    end
+    
+    M = full(M);
+end
+
+% Computes the condition number of a matrix to check for numerical ill-conditioning:
+% kappa < 1e2 is good (k=1 is perfect condition and k > 1e3 is ill-conditioned)
+function kappa = matrix_condition_number(A, norm_type)
+    if nargin < 2
+        norm_type = 2;
+    end
+    [m, n] = size(A);
+    if m ~= n
+        error('Matrix must be square');
+    end
+    if abs(det(A)) < eps
+        warning('Matrix is close to singular. Condition number may be very large.');
+    end
+    kappa = cond(A, norm_type);
+end
+
+%% Plotting functions
+function plotFunnel(x_nom, ellipsoidMatrix, rhoScaling, projectionDims)
+    
+    if nargin < 4
+        projectionDims = [1 2];
+    end
+
+    figure
+    hold on;
+    grid on; 
+    axis equal;
+    
+    for k=1:1:size(x_nom,2)
+        M = ellipsoidMatrix(:,:,k)/rhoScaling(k);
+        M_xy = project_ellipsoid_matrix(M, projectionDims);
+        center = [x_nom(projectionDims(1),k), x_nom(projectionDims(2),k)]';
+        plotEllipse(center, M_xy)
+    end 
+    
+    title('Invariant Ellipsoidal Sets along the nominal trajectory');
+    xlabel(['x_{', num2str(projectionDims(1)), '}'])
+    ylabel(['x_{', num2str(projectionDims(2)), '}'])
+    plot(x_nom(projectionDims(1),:),x_nom(projectionDims(2),:),'--b');
+end
+
+function plotInitialSet(x_initial, initialEllipsoid)
+
+    M = initialEllipsoid;
+    M_xy = project_ellipsoid_matrix(M, [1 2]);
+
+    [eig_vec, eig_val] = eig(M_xy);
+    
+    theta = linspace(0, 2*pi, 100); % Parameterize ellipse
+    ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
+    rotated_ellipse = eig_vec * ellipse_boundary;
+    
+    plot(x_initial(1) + rotated_ellipse(1, :), ...
+         x_initial(2) + rotated_ellipse(2, :), ...
+         '-.g', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
+end
+
+function plotFinalSet(x_initial, finalEllipsoid)
+
+    M = finalEllipsoid;
+    M_xy = project_ellipsoid_matrix(M, [1 2]);
+
+    [eig_vec, eig_val] = eig(M_xy);
+    
+    theta = linspace(0, 2*pi, 100); % Parameterize ellipse
+    ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
+    rotated_ellipse = eig_vec * ellipse_boundary;
+    
+    plot(x_initial(1) + rotated_ellipse(1, :), ...
+         x_initial(2) + rotated_ellipse(2, :), ...
+         '-.r', 'LineWidth', 1.2) %'FaceAlpha', 0.3); for 'fill' function
+end
+
+function M_2d = project_ellipsoid_matrix(M, projection_dims)
+    % Input:
+    % M: nxn matrix defining the n-dimensional ellipsoid x^T M x < 1
+    % projection_dims: 2-element vector specifying which dimensions to project onto
+    %                  (e.g., [1 2] for xy-plane, [1 3] for xz-plane)
+    
+    n = size(M, 1); %get the dimensionality of matrix M
+
+    basisMatrix = zeros(n,2);
+    basisMatrix(projection_dims(1),1) = 1;
+    basisMatrix(projection_dims(2),2) = 1;
+
+    M_2d = inv(basisMatrix' *inv(M) * basisMatrix);
+end
+
+function plotEllipse(center, ellipseMatrix)
+    
+    %plot an ellipse from which initial states are sampled
+    ellipseCenter = center(1:2); % 2D center of the ellipsoid
+    [eig_vec, eig_val] = eig(ellipseMatrix);
+    
+    theta = linspace(0, 2*pi, 100); % Parameterize ellipse
+    ellipse_boundary = eig_val^(-1/2) * [cos(theta); sin(theta)];
+    rotated_ellipse = eig_vec * ellipse_boundary;
+    
+    plot(ellipseCenter(1) + rotated_ellipse(1, :), ...
+         ellipseCenter(2) + rotated_ellipse(2, :), ...
+         '-k', 'LineWidth', 1.2);  
+end
