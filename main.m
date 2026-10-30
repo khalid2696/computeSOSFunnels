@@ -50,35 +50,35 @@ drawnow
 
 %% Optionally, do Monte-Carlo rollouts to check whether the TVLQR is stabilizing
 
-close all;
-startTimeIndex = 1; %start time for the rollouts
-startMaxPerturbation = 1; %a measure of max initial perturbations to state
-                         %decrease this for a smaller initial set
-%run("./utils/checkClosedLoop_MCRollouts.m");
-%keyboard
+% close all;
+% startTimeIndex = 1; %start time for the rollouts
+% startMaxPerturbation = 1; %a measure of max initial perturbations to state
+%                          %decrease this for a smaller initial set
+% %run("./utils/checkClosedLoop_MCRollouts.m");
+% %keyboard
 
 %% [Optional] Load all the saved files for further analysis
 
-clearvars; close all;
-addpath('./lib/');
-
-load('./precomputedData/nominalTrajectory.mat');
-load('./precomputedData/LQRGainsAndCostMatrices.mat');
-
-%following functions can take in an additional (optional) argument
-%specifiying the projection dimensions - for example: [1 2], [1 3], etc.
-projectionDims_2D = [1 2];
-plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
-
-plotOneLevelSet_3D(x_nom, P);
-daspect([1 1 2]);
-
-%for k=1:length(time_instances)
-%    disp(matrix_condition_number(P(:,:,k)));
-%    disp(' ');
-%end
-
-%keyboard
+% clearvars; close all;
+% addpath('./lib/');
+% 
+% load('./precomputedData/nominalTrajectory.mat');
+% load('./precomputedData/LQRGainsAndCostMatrices.mat');
+% 
+% %following functions can take in an additional (optional) argument
+% %specifiying the projection dimensions - for example: [1 2], [1 3], etc.
+% projectionDims_2D = [1 2];
+% plotOneLevelSet_2D(x_nom, P, projectionDims_2D); %axis auto or %axis normal
+% 
+% plotOneLevelSet_3D(x_nom, P);
+% daspect([1 1 2]);
+% 
+% %for k=1:length(time_instances)
+% %    disp(matrix_condition_number(P(:,:,k)));
+% %    disp(' ');
+% %end
+% 
+% %keyboard
 
 %% Polynomialize system dynamics for SOS (algebraic) programming and compute dynamics of state-deviations (xbar)
 

@@ -1,4 +1,4 @@
-%clc; clearvars; close all
+% clc; clearvars; close all
 warning('off','MATLAB:singularMatrix');
 
 %% Loading the time instances, nominal trajectory, nominal input and feedback control gain
@@ -42,13 +42,13 @@ LyapunovFnDeg = 2;     %quadratic Lyapunov function
 tolerance = 1e-6;
 convergenceTolerance = 1e-2; %if less than 1 percent change
 
-% 2. Parameters pertaining to Alternation Scheme (SCP) -- feasibility step and optimisation step             
+% 2. Parameters pertaining to Alternation Scheme -- feasibility step and optimisation step             
 if ~exist('maxIter','var')
-    maxIter = 3; %maximum number of iterations
+    maxIter = 4; %maximum number of iterations
 end
-rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
+rhoStepUpValue = 0; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
-                       %Default Value: 0.001
+                       %Default Value: 1e-3
 
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
@@ -70,7 +70,7 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 2; %c
+    rhoInitialGuessExpCoeff = 1; %c
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -112,7 +112,6 @@ if drawFlag
         title('Initial guess V and rho scaling (infeasible)');
     end
 end
-disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
     disp('Feasibility check passed for given rho guess..');
@@ -134,7 +133,7 @@ prevRhoScaling = NaN(size(time_instances)); %NaN values to start the iterations
 
 for iter=1:maxIter
     
-    clc
+    % clc
     % ------ L-Step: Finding polynomial Lagrange multipliers  ------ %
     % Feasibility check to see whether we're able to determine multiplier terms 
     % at all time instances for a given guess of level-set boundary (rho) values and candidate V 
