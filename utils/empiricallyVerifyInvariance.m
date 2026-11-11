@@ -75,7 +75,8 @@ for i = 1:numSamples
     x0 = initialStateSamples(:, i);
     %options: Euler, trapezoidal, RK4, (inbuilt) ode45
     [x_traj, total_input, error, cost] = ...
-        forward_propagate(dynamicsFnHandle, x0, rollout_x_nom, rollout_u_nom, rollout_K, rollout_P, rollout_time_horizon, Ts, 'RK4');
+        forward_propagate(dynamicsFnHandle, x0, rollout_x_nom, rollout_u_nom, ...
+            rollout_K, rollout_P, rollout_time_horizon, Ts, 'RK4');
     trajectories{i} = x_traj;
     input_profiles{i} = total_input;
     errors(i, :) = error;
@@ -100,7 +101,7 @@ disp('Plotting trajectories and metrics from MC rollouts..');
 disp(' ');
 
 %Plot the rollout trajectories
-plot_trajectories(trajectories, rollout_x_nom, inletSet, x_nom);
+plot_trajectories(trajectories, rollout_x_nom, x_nom);
 
 %Plot the input profiles
 %plot_input_profiles(input_profiles, rollout_time_horizon, u_nom, time_instances)
