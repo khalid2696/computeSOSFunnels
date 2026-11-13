@@ -1,6 +1,6 @@
 # computeSOSFunnels
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18047554.svg)](https://doi.org/10.5281/zenodo.18047554)
+[![arXiv](https://img.shields.io/badge/arXiv-2611.04325-b31b1b.svg)](https://arxiv.org/abs/2611.04325)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MATLAB](https://img.shields.io/badge/Made%20with-MATLAB-orange.svg)](https://www.mathworks.com/)
 
@@ -27,9 +27,9 @@ A comprehensive technical report and user tutorial is available:
 ## 🛠️ Prerequisites
 * **MATLAB** (R2021b or later recommended)
 * **[YALMIP](https://yalmip.github.io/)** (Optimization interface)
-* **[IPOPT](https://coin-or.github.io/Ipopt/)** (Nonlinear solver)
-* **[SOSTOOLS](https://www.cds.caltech.edu/sostools/)** (SOS parsing)
-* **SDP Solver:** [MOSEK](https://www.mosek.com/) (Recommended) or SeDuMi.
+* **[IPOPT](https://coin-or.github.io/Ipopt/)** (Nonlinear program solver)
+* **[SOSTOOLS](https://www.cds.caltech.edu/sostools/)** (SOS parsing, version 4.0 or later)
+* **SDP Solver:** [MOSEK](https://www.mosek.com/) (recommended, version 10.2 or later) or SeDuMi.
 
 ## 📦 Installation
 ```bash
@@ -75,18 +75,27 @@ For research inquiries, collaboration proposals, or theoretical questions regard
 > 🌐 [khalid2696.github.io](https://khalid2696.github.io)  
 
 ## 🖊️ Citation
-If you find this code useful in your research, please cite the software:
+If you find this code useful in your research, please cite the software and the associated paper:
 
 **BibTeX:**
 ```bibtex
-@software{jaffar_2025_computeSOSFunnels,
-  author       = {M Jaffar, Mohamed Khalid},
-  title        = {computeSOSFunnels: A MATLAB Framework for Invariant Funnel Synthesis using Sum-of-Squares Optimization},
-  version      = {1.0.0},
-  publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.18047554},
-  url          = {https://doi.org/10.5281/zenodo.18047554},
-  year         = {2025}
+@article{jaffar2026_computeSOSFunnels_paper,
+  author  = {M Jaffar, Mohamed Khalid},
+  title   = {Computing Invariant Reachable Sets through Sum-of-Squares Programming},
+  journal = {arXiv preprint},
+  url     = {https://arxiv.org/abs/2611.04325},
+  year    = {2026}
+}
+```
+
+```bibtex
+@software{jaffar2025_computeSOSFunnels_software,
+  author    = {M Jaffar, Mohamed Khalid},
+  title     = {computeSOSFunnels: A MATLAB Framework for Invariant Funnel Synthesis 
+  using Sum-of-Squares Optimization},
+  url       = {https://github.com/khalid2696/computeSOSFunnels},
+  version   = {1.0.0},
+  year      = {2025}
 }
 ```
 
