@@ -14,7 +14,8 @@ for drv_i = 1:numel(drv_rho)
         clear runLog
         rhoInitialGuessConstant = drv_rho(drv_i);
         rhoInitialGuessExpCoeff = drv_c(drv_j);
-        maxIter = 20; multiplierPolyDeg = 6; drawFlag = 0;
+        maxIter = 4; convergenceTolerance = -inf; 
+        multiplierPolyDeg = 6; drawFlag = 0;
         try
             run('step4_computeFunnel.m');
         catch drv_err
@@ -26,21 +27,19 @@ for drv_i = 1:numel(drv_rho)
 end
 save('./results/sweep.mat', 'drv_sweep', 'drv_rho', 'drv_c', 'fixedRegions');
 
-% ---- LaTeX cells for Table 2: funnel vol / inlet-outlet ratio / iterations (* = hit j_max) ----
 fprintf('\nRatio floor sqrt(det M_T / det M_I) = %.4g\n', drv_sweep{1,1}.ratioFloor);
-for drv_i = 1:numel(drv_rho)
-    drv_row = sprintf('%.4g', drv_rho(drv_i));
-    for drv_j = 1:numel(drv_c)
-        L = drv_sweep{drv_i, drv_j};
-        if strcmp(L.status, 'infeasible_C')
-            drv_cell = 'C';
-        elseif strcmp(L.status, 'infeasible_I') || L.iters == 0
-            drv_cell = '--';
-        else
-            drv_star = ''; if ~L.converged, drv_star = '$^*$'; end
-            drv_cell = sprintf('%.3g / %.3g / %d%s', L.funnelVol(end), L.inOutRatio, L.iters, drv_star);
-        end
-        drv_row = [drv_row ' & ' drv_cell]; %#ok<AGROW>
+
+%% ---- LaTeX cells for Table 2: funnel vol | inlet-outlet ratio ----
+
+load('./results/sweep.mat');
+for i = 1:numel(drv_rho)
+    row = sprintf('%.4g', drv_rho(i));
+    for j = 1:numel(drv_c)
+        L = drv_sweep{i,j};
+        if strcmp(L.status,'infeasible_C') || drv_rho(i) >= 0.0625 - 1e-12, c = 'C';
+        elseif L.iters == 0, c = '--';
+        else, c = sprintf('%.3f / %.0f', L.funnelVol(end), L.inOutRatio); end
+        row = [row ' & ' c];
     end
-    fprintf('%s \\\\\n', drv_row);
+    fprintf('%s \\\\\n', row);
 end

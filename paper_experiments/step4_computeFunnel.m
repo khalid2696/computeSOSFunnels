@@ -184,11 +184,11 @@ for iter=1:maxIter
     % ------ L-Step: Finding polynomial Lagrange multipliers  ------ %
     % Feasibility check to see whether we're able to determine multiplier terms 
     % at all time instances for a given guess of level-set boundary (rho) values and candidate V 
-    t0 = tic;                                                             % [RETROFIT]
+    tL_start = tic;                                                             % [RETROFIT]
     [~, multiplierTerms, infeasibilityStatus, infoL] = findPolynomialMultipliers(time_instances, xbar, deviationDynamics, candidateV, currRhoScaling, ...
                                                                             startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                               multiplierPolyDeg, options, tolerance);
-    runLog.tL(iter) = toc(t0); runLog.cpuL(iter) = infoL.cpusec; runLog.sizeL(iter,:) = infoL.problemSize; % [RETROFIT]
+    runLog.tL(iter) = toc(tL_start); runLog.cpuL(iter) = infoL.cpusec; runLog.sizeL(iter,:) = infoL.problemSize; % [RETROFIT]
  
     if ~infeasibilityStatus
         disp('Feasibility-check step: passed'); disp(' ');
@@ -212,12 +212,12 @@ for iter=1:maxIter
     % ------ V-step: Finding Lyapunov function & level-set boundary value ------ %
     % Optimising the level-set volume through level-set boundary (rho) values and Lyapunov functions V
     % at all time instances, for the feasible multipliers obtained in the previous step 
-    t0 = tic;                                                             % [RETROFIT]
+    tV_start = tic;                                                             % [RETROFIT]
     [~, sol_candidateVArray, sol_rhoValsArray, infeasibilityStatus, infoV] = ...
                                   findLyapFnAndLevelSetValues(time_instances, xbar, deviationDynamics, candidateV, multiplierTerms, ...
                                                                 startRegionEllipsoidMatrix, goalRegionEllipsoidMatrix, ...
                                                                    LyapunovFnDeg, options, tolerance); 
-    runLog.tV(iter) = toc(t0); runLog.cpuV(iter) = infoV.cpusec; runLog.sizeV(iter,:) = infoV.problemSize; % [RETROFIT]
+    runLog.tV(iter) = toc(tV_start); runLog.cpuV(iter) = infoV.cpusec; runLog.sizeV(iter,:) = infoV.problemSize; % [RETROFIT]
 
     if infeasibilityStatus
         runLog.status = sprintf('stopped_V_infeasible_j%d', iter);       % [RETROFIT]
@@ -256,9 +256,8 @@ for iter=1:maxIter
             plotFunnel(x_nom, ellipsoidMatrices, currRhoScaling);
             plotInitialSet(x_nom(:,1), startRegionEllipsoidMatrix);
             plotFinalSet(x_nom(:,end), goalRegionEllipsoidMatrix);
+            title('Optimised funnel certificate');
         end
-
-        title('Optimised funnel certificate');
         
         % display some volumetric properties                              % [RETROFIT] true volumes (include omega_n)
         fprintf('iter = %d | J = %.6g | funnel vol = %.6g | inlet vol = %.6g (input %.6g) | outlet vol = %.6g (input %.6g)\n\n', ...
@@ -266,7 +265,7 @@ for iter=1:maxIter
     end
 
     % [RETROFIT] stopping rule: relative decrease of the objective below delta
-    if iter > 1 && (runLog.J(iter-1) - runLog.J(iter))/runLog.J(iter-1) < convergenceTolerance
+    if iter > 1 && (runLog.J(iter-1) - runLog.J(iter))/runLog.J(iter) < convergenceTolerance
         runLog.converged = true;
         prevRhoScaling = currRhoScaling;
         candidateV = sol_candidateVArray;
@@ -533,11 +532,11 @@ end
 function [prog, sol_info] = solveAndLog(prog, options)
     captureLog = isfield(options,'captureLog') && options.captureLog;
     solverOpts = options;
-    % Suppress solver logs (solver info)
     if isfield(solverOpts,'captureLog'), solverOpts = rmfield(solverOpts,'captureLog'); end
 
     if captureLog
         solverText = evalc('[prog, sol_info] = sossolve(prog, solverOpts);');
+        % Suppress printing of solver info using evalc
         sol_info.problemSize = parseMosekSize(solverText);
     else
         [prog, sol_info] = sossolve(prog, solverOpts);

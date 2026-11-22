@@ -5,7 +5,7 @@ clear inletScale runLog maxIter multiplierPolyDeg convergenceTolerance ...
       rhoInitialGuessConstant rhoInitialGuessExpCoeff captureSolverLog
 load('./results/default.mat', 'fixedRegions');
 
-drv_s   = [0.5 1 1.5];     % inlet scales: E_I -> s*E_I
+drv_s   = [0.5 1 1.25];     % inlet scales: E_I -> s*E_I
 drv_Ms  = 1000;            % boundary samples per knot (true dynamics)
 drv_MsP = 50;              % boundary samples per knot (Taylor polynomial, sanity check; slow)
 drv_val = struct('s', {}, 'runLog', {}, 'viol', {}, 'maxExcess', {}, 'violPoly', {});
@@ -13,9 +13,14 @@ drv_val = struct('s', {}, 'runLog', {}, 'viol', {}, 'maxExcess', {}, 'violPoly',
 for drv_i = 1:numel(drv_s)
     clear runLog
     inletScale              = drv_s(drv_i);
-    rhoInitialGuessConstant = 0.05;
-    rhoInitialGuessExpCoeff = 1 + 2*max(0, log(inletScale));  % enlarge guess inlet by s^2 only when s > 1
-    maxIter = 20; multiplierPolyDeg = 6; drawFlag = 0;
+    if inletScale <= 1
+        rhoInitialGuessConstant = 0.05*inletScale^2;   % shrink whole guess by s
+        rhoInitialGuessExpCoeff = 1;
+    else
+        rhoInitialGuessConstant = 0.05;                % outlet fixed by E_T
+        rhoInitialGuessExpCoeff = 1 + 2*log(inletScale);
+    end
+    maxIter = 4; convergenceTolerance = -inf; multiplierPolyDeg = 6; drawFlag = 0;
     try
         run('step4_computeFunnel.m');
     catch drv_err
@@ -35,3 +40,20 @@ for drv_i = 1:numel(drv_s)
 end
 clear inletScale   % IMPORTANT: do not leak into later runs
 save('./results/validity.mat', 'drv_val');
+
+%% Post-process
+load('./results/validity.mat');
+for i = 1:numel(drv_val)
+    v = drv_val(i); if isempty(v.maxExcess), continue; end
+    rhoDot = diff(v.runLog.rho)/v.runLog.deltaT;            % knots k = 2..N
+    fprintf('s=%.2f: worst Vdot - rhoDot = %.3g | worst relative to |rhoDot| = %.3g\n', ...
+            v.s, max(v.maxExcess(2:end)), max(v.maxExcess(2:end)./abs(rhoDot)));
+end
+
+%% truncation errors
+load('./results/validity.mat');      % the file with s = 0.5, 1, 1.25
+for i = 1:numel(drv_val)
+    v = drv_val(i); if v.runLog.iters < 1, continue; end
+    [tr, em] = truncationError(v.runLog, x_nom, u_nom, K, time_instances, deviationDynamics, xbar, @unicycleDynamics, 50);
+    fprintf('s=%.2f: max truncation error = %.3g of |rhoDot| | max error-to-margin = %.3g\n', v.s, max(tr), max(em));
+end

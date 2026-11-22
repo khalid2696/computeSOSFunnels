@@ -13,7 +13,7 @@ drv_tim  = struct('deg', {}, 'runLog', {});
 
 % warm-up run (license checkout, JIT) -- discarded
 maxIter = 1; multiplierPolyDeg = drv_deg(end); drawFlag = 0;
-try, run('step4_computeFunnel.m'); catch, end
+try run('step4_computeFunnel.m'); catch, end
 
 for drv_i = 1:numel(drv_deg)
     clear runLog
@@ -37,5 +37,47 @@ for drv_i = 1:numel(drv_deg)
         fprintf('%s deg=%d: %s\n', drv_name, drv_deg(drv_i), runLog.status);
     end
 end
-clear convergenceTolerance   % restore default (1e-2) for later runs
+%%
+clear convergenceTolerance   % restore default (5e-2) for later runs
 save(sprintf('./results/timing_%s.mat', drv_name), 'drv_tim');
+
+%%
+% Table 3: prints LaTeX rows from the timing results of all systems,
+% checks measured PSD sizes against the analytic count, and prints the
+% MOSEK share of wall time (for the "1--4%" sentence).
+% Edit the paths below to where each system's results/timing_<name>.mat lives.
+
+file = {'Unicycle',  './results/timing_unicycle.mat';};
+
+rows = {};  share = [];
+for f = 1:size(file,1)
+    if ~isfile(file{f,2}), fprintf('%% missing: %s\n', file{f,2}); continue; end
+    S = load(file{f,2}, 'drv_tim');
+    for i = 1:numel(S.drv_tim)
+        L   = S.drv_tim(i).runLog;  deg = S.drv_tim(i).deg;
+        n   = L.n;  K = L.K;
+        d   = max(2, (deg + 2)/2);                 % half-degree of the invariance constraint
+        g   = nchoosek(n + d, d);                  % Gram size of each invariance block
+        if L.iters < 1
+            rows{end+1} = sprintf('%s & %d & %d & %d & %d & \\multicolumn{3}{c}{initial guess infeasible} \\\\', ...
+                                  file{f,1}, n, K, deg, g);
+            continue
+        end
+        % analytic scalarized PSD entries (dense Gram basis for invariance blocks)
+        predL = K*g*(g+1)/2 + K*n*(n+1)/2       + 2*(n+1)*(n+2)/2 + 2;
+        predV = K*g*(g+1)/2 + (K+1)*n*(n+1)/2   + (K+1) + 2*(n+1)*(n+2)/2 + 1;
+        measL = L.sizeL(1,4);  measV = L.sizeV(1,4);
+        if measL ~= predL || measV ~= predV
+            fprintf('%% NOTE %s deg=%d: measured PSD entries %d/%d vs analytic %d/%d (SOSTOOLS pruned monomials?)\n', ...
+                    file{f,1}, deg, measL, measV, predL, predV);
+        end
+        tL = mean(L.tL); tV = mean(L.tV); cL = mean(L.cpuL); cV = mean(L.cpuV);
+        share = [share, cL/tL, cV/tV];
+        rows{end+1} = sprintf('%s & %d & %d & %d & %d & %d / %d & %.3g (%.2g) & %.3g (%.2g) \\\\', ...
+                              file{f,1}, n, K, deg, g, measL, measV, tL, cL, tV, cV); %#ok<SAGROW>
+    end
+end
+
+fprintf('\n%% ---- paste into Table 3 ----\n');
+fprintf('%s\n', rows{:});
+fprintf('\n%% MOSEK share of wall time: %.1f%% to %.1f%%\n', 100*min(share), 100*max(share));

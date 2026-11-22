@@ -46,9 +46,10 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
-                       %[TUNEABLE] decrease this if you run into infeasibility 
-                       %Default Value: 0.001
+% rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
+%                        %[TUNEABLE] decrease this if you run into infeasibility 
+%                        %Default Value: 0.001
+rhoStepUpValue = 0;
 
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
@@ -70,7 +71,7 @@ end
 %             c = 0 --> constant rho_guess       ("tube" -- somewhat ideal)
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 if ~exist('rhoInitialGuessExpCoeff','var')
-    rhoInitialGuessExpCoeff = 2; %c
+    rhoInitialGuessExpCoeff = 1; %c
 end
 %% Get the scaling for initial guess of level set boundary value, rho
 
@@ -112,7 +113,7 @@ if drawFlag
         title('Initial guess V and rho scaling (infeasible)');
     end
 end
-disp(rhoInitialGuess');
+% disp(rhoInitialGuess');
 
 if ~infeasibilityStatus
     disp('Feasibility check passed for given rho guess..');
@@ -134,7 +135,7 @@ prevRhoScaling = NaN(size(time_instances)); %NaN values to start the iterations
 
 for iter=1:maxIter
     
-    clc
+    %clc
     % ------ L-Step: Finding polynomial Lagrange multipliers  ------ %
     % Feasibility check to see whether we're able to determine multiplier terms 
     % at all time instances for a given guess of level-set boundary (rho) values and candidate V 
@@ -233,6 +234,8 @@ disp(sqrt(det(goalRegionEllipsoidMatrix))/sqrt(det((ellipsoidMatrices(:,:,end)/c
 disp('Volume ratio of computed inlet to outlet:')
 disp(sqrt(det((ellipsoidMatrices(:,:,end)/currRhoScaling(end))))/sqrt(det((ellipsoidMatrices(:,:,1)/currRhoScaling(1)))));
 
+disp('Volume ratio of input inlet set to input outlet set:')
+disp(sqrt(det(goalRegionEllipsoidMatrix))/sqrt(det(startRegionEllipsoidMatrix)));
 %% Status message
 
 disp('Finished computing ellipsoidal invariance-certificates around the nominal trajectory');
@@ -474,16 +477,10 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         
         rhoGuess(k) = rho_0 * exp(c*(tk - tf)/(t0 - tf));
 
-        %getting some initial Lyapunov candidates
-        f = deviationDynamics{k};
-        A = jacobian(f,xbar); %symbolic A matrix
-        A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
-        
-        if ~all(real(eig(A_at_origin)) < 0)
-            disp(k); disp(eig(A_at_origin));
-            disp('Nominal trajectory cannot be determined to be stable using indirect Lyapunov method');  
-            error('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
-        end
+        % %guessing some initial Lyapunov candidates
+        % f = deviationDynamics{k};
+        % A = jacobian(f,xbar); %symbolic A matrix
+        % A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
     
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
     end

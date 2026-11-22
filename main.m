@@ -13,7 +13,7 @@ addpath('./lib/');
 % Convention: theta = pi/2 -- North, 0 -- East
 
 initialState = [ 0; 0; pi/2;];   % initial state: at origin facing North
-finalState   = [-2; 4; pi/2;];   % desired final state
+finalState   = [ 2; 4; pi/2;];   % desired final state
 
 %% Define the system dynamics as a function handle
 dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
@@ -54,10 +54,9 @@ close all;
 startTimeIndex = 1; %start time for the rollouts
 startMaxPerturbation = 1; %a measure of max initial perturbations to state
                          %decrease this for a smaller initial set
-run("./utils/checkClosedLoop_MCRollouts.m");
-%keyboard
+% run("./utils/checkClosedLoop_MCRollouts.m");
 
-return
+% return
 %% [Optional] Load all the saved files for further analysis
 
 clearvars; close all;
@@ -156,7 +155,7 @@ close all
 drawFlag = 1; %change this to '0' if you don't want to plot results
 
 %specify SOS program hyperparameters
-maxIter = 1; %maximum number of iterations
+maxIter = 4; %maximum number of iterations
 
 %best initialisation parameters after performing the sweep
 rhoInitialGuessConstant = 0.05; %[TUNEABLE] rho_0: decrease value if initial guess fails, 
@@ -165,7 +164,7 @@ rhoInitialGuessExpCoeff = 1; %[TUNEABLE] c: decrease value if initial guess fail
 %Note:
 %for "longer" trajectories,  rho0 = 0.05 and c = 1 or 1.5 seem to give a good feasible initial guess
 %for "shorter" trajectories, rho0 = 0.03 and c = 0 gives a feasible initial guess
-
+% (0.05,-1.5) for theta_i = pi/2, theta_f = pi/4
 usageMode = 'shapeOptimisation'; %will have to workshop a name for this!
 run("Step4_computeTimeSampledInvarianceCertificates.m");
 

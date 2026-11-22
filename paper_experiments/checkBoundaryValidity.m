@@ -19,6 +19,7 @@ for k = 2:N
     Pk = P(:,:,k);  Pkm = P(:,:,k-1);
     rk = rho(k);    rhoDot = (rk - rho(k-1))/dT;
 
+    %sample states from funnel boundary
     U  = randn(n, Ms);  U = U./vecnorm(U);
     Xb = sqrt(rk)*(sqrtm(Pk)\U);                         % xb' * Pk * xb = rho_k
 
