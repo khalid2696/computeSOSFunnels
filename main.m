@@ -169,7 +169,7 @@ maxIter = 1; %maximum number of iterations
 %             c < 0 --> exp increasing rho_guess (expanding funnel -- not-so ideal)
 rhoInitialGuessConstant = 0.2; % [TUNEABLE] rho_0: decrease value if initial guess fails, 
                                % keep it greater than 0!
-rhoInitialGuessExpCoeff = 0; % [TUNEABLE] c: increase value if initial guess fails
+rhoInitialGuessExpCoeff = 0; % [TUNEABLE] c: decrease value if initial guess fails
 
 %rho0 = 0.2 and c = 0 seems to give good initial feasible guess (top balance, theta = pi)
 %for Q = diag([5, 0.1, 10, 0.1]); R = 10; terminalRegionScaling = 1;
