@@ -49,16 +49,14 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 1; %maximum number of iterations
 end
-rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
+rhoStepUpValue = 0; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
-                       %Default Value: 0.001
+                       %Default Value: 1e-3
 
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
                     %decrease if computed funnel is weirdly shaped
 goalScaling = 0.6;  %Keep it less than 1
-
-%0.5 and 0.2
 
 % 4. Parameters pertaining to initial guess of level-set boundary value, rho
 % Exponentially evolving rho_guess
@@ -116,7 +114,6 @@ if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
             title('Initial guess V and rho scaling (infeasible)');
         end
     end
-    disp(rhoInitialGuess');
     
     if ~infeasibilityStatus
         disp('Feasibility check passed for given rho guess..');
@@ -219,10 +216,7 @@ for iter=1:maxIter
     
     candidateV = sol_candidateVArray;
 
-    drawnow;
-    iter
-    %keyboard;
-    
+    drawnow  
 end
 
 %% Display some relevant metrics
