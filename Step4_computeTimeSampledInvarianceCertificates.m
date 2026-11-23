@@ -46,10 +46,9 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 3; %maximum number of iterations
 end
-% rhoStepUpValue = 1e-3; % analagous to alpha in gradient descent
-%                        %[TUNEABLE] decrease this if you run into infeasibility 
-%                        %Default Value: 0.001
-rhoStepUpValue = 0;
+rhoStepUpValue = 0; % analagous to alpha in gradient descent
+                       %[TUNEABLE] decrease this if you run into infeasibility 
+                       %Default Value: 1e-3
 
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
@@ -185,8 +184,8 @@ for iter=1:maxIter
         ellipsoidMatrices(:,:,k) = getEllipsoidMatrix_nD(V_polyFn, n);
         currRhoScaling(k) = sol_rhoValsArray{k};
 
-	% disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
-    %     disp(' ');
+	    % disp(matrix_condition_number(ellipsoidMatrices(:,:,k)));
+        % disp(' ');
     end
 
     if ~infeasibilityStatus
