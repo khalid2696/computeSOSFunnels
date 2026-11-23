@@ -480,16 +480,10 @@ function [rhoGuess, candidateV] = getInitialRhoGuessAndCandidateV(time_instances
         
         rhoGuess(k) = rho_0 * exp(c*(tk - tf)/(t0 - tf));
 
-        %getting some initial Lyapunov candidates
-        f = deviationDynamics{k};
-        A = jacobian(f,xbar); %symbolic A matrix
-        A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
-        
-        if ~all(real(eig(A_at_origin)) <= 0)
-            disp(k); disp(eig(A_at_origin));
-            disp('Nominal trajectory cannot be determined to be stable using indirect Lyapunov method');  
-            disp('Check the closed-loop system synthesis -- rework the nominal trajectory computation and TVLQR synthesis!')
-        end
+        % %trying out some initial Lyapunov candidates
+        % f = deviationDynamics{k};
+        % A = jacobian(f,xbar); %symbolic A matrix
+        % A_at_origin = double(subs(A,xbar,zeros(size(xbar)))); %numeric A matrix
     
         candidateV{k} = xbar'*costToGoMatrices(:,:,k)*xbar;
     end
