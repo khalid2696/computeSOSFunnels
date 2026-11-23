@@ -23,7 +23,7 @@ dynamicsFnHandle = @(x, u) unicycle_dynamics(x, u);
 maxTimeHorizon = 10;
 numTimeSteps = 40;         % number of time samples
 
-drawFlag = 0; %uncomment this if you want to plot results
+drawFlag = 0; %assign true if you want to plot results
 run("Step1_computeNominalTrajectory.m");
 disp('- - - - - - -'); disp(" ");
 
@@ -54,8 +54,9 @@ drawnow
 % startTimeIndex = 1; %start time for the rollouts
 % startMaxPerturbation = 1; %a measure of max initial perturbations to state
 %                          %decrease this for a smaller initial set
-% %run("./utils/checkClosedLoop_MCRollouts.m");
-% %keyboard
+% run("./utils/checkClosedLoop_MCRollouts.m");
+% 
+% % keyboard
 
 %% [Optional] Load all the saved files for further analysis
 
