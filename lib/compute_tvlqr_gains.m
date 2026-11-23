@@ -40,51 +40,46 @@ function [K, P] = compute_tvlqr_gains(f, x, u, x_nom, u_nom, Q, R, Pf, dt, metho
 
     elseif strcmp(method, 'continuous')
         % === Continuous-Time DRE (ODE-based) ===
-        tf = (N-1)*dt;
-        tspan = linspace(tf, 0, N);
-
+        t_fwd = (0:N-1)*dt;                       % forward grid, matches x_nom indexing
+    
+        A_fun = matlabFunction(A_sym, 'Vars', {x, u});
+        B_fun = matlabFunction(B_sym, 'Vars', {x, u});
         A_all = zeros(nx, nx, N);
         B_all = zeros(nx, nu, N);
         for k = 1:N
-            A_all(:,:,k) = double(subs(A_sym, [x; u], [x_nom(:,k); u_nom(:,k)]));
-            B_all(:,:,k) = double(subs(B_sym, [x; u], [x_nom(:,k); u_nom(:,k)]));
+            A_all(:,:,k) = A_fun(x_nom(:,k), u_nom(:,k));
+            B_all(:,:,k) = B_fun(x_nom(:,k), u_nom(:,k));
         end
-
-        A_interp = @(t) interp1(tspan, permute(A_all, [3 1 2]), t, 'linear', 'extrap');
-        B_interp = @(t) interp1(tspan, permute(B_all, [3 1 2]), t, 'linear', 'extrap');
-
-        P0_vec = reshape(Pf, [], 1);
-        opts = odeset('RelTol',1e-10,'AbsTol',1e-12);
-        [T_sol, P_vec_sol] = ode15s(@(t, Pvec) dre_rhs(t, Pvec, A_interp, B_interp, Q, R, nx), [tf 0], P0_vec, opts);
-
-        % Interpolate solution back to N steps
-        P_interp = interp1(T_sol, P_vec_sol, tspan, 'linear');
+    
+        % Interpolants on the FORWARD grid
+        A_gi = griddedInterpolant(t_fwd(:), reshape(A_all, nx*nx, N).', 'linear');
+        B_gi = griddedInterpolant(t_fwd(:), reshape(B_all, nx*nu, N).', 'linear');
+        A_interp = @(t) reshape(A_gi(t), nx, nx);
+        B_interp = @(t) reshape(B_gi(t), nx, nu);
+    
+        % Integrate backward from tf to 0, output at the grid points
+        opts = odeset('RelTol',1e-8,'AbsTol',1e-10);
+        [~, P_vec_sol] = ode15s(@(t,Pv) dre_rhs(t, Pv, A_interp, B_interp, Q, R, nx), ...
+                                fliplr(t_fwd), reshape(Pf,[],1), opts);
+        P_vec_sol = flipud(P_vec_sol);            % row k now corresponds to t_fwd(k)
+    
+        P = zeros(nx, nx, N);
+        K = zeros(nu, nx, N);
         for k = 1:N
-            P_k = reshape(P_interp(k,:), nx, nx);
-            P_k = 0.5 * (P_k + P_k'); % enforce symmetry
+            P_k = reshape(P_vec_sol(k,:), nx, nx);
+            P_k = 0.5*(P_k + P_k.');
             P(:,:,k) = P_k;
-
-            A_k = A_all(:,:,k);
-            B_k = B_all(:,:,k);
-            K(:,:,k) = (R \ B_k') * P_k;
+            K(:,:,k) = R \ (B_all(:,:,k).' * P_k);
         end
-
-        % Flip to go forward in time: [t0 to tf]
-        P = flip(P, 3);    % P is nxnxN
-        K = flip(K, 3);    % K is mxnxN
     end
 end
 
 % Differential Riccati equation, returns Pdot in vector format
-function P_dot_vec = dre_rhs(t, Pvec, A_interp, B_interp, Q, R, n)
-    P = reshape(Pvec, n, n);
-    A = squeeze(A_interp(t));
-    B = squeeze(B_interp(t))'; %had to include 'transpose' to match the dimensions
-
-    P_dot = -(P*A + A'*P - P*B*(R\(B'))*P + Q);
-    
-    % Vectorize the nxn matrix to n^2 x 1 vector (to use it with in-built ode solvers) 
-    P_dot_vec = reshape(P_dot, [], 1);
+function P_dot_vec = dre_rhs(t, Pvec, A_interp, B_interp, Q, R, nx)
+    P  = reshape(Pvec, nx, nx);
+    A  = A_interp(t);  B = B_interp(t);
+    P_dot_vec = -(P*A + A.'*P - P*B*(R\(B.'*P)) + Q);
+    P_dot_vec = P_dot_vec(:);
 end
 
 % Computes symbolic Jacobians A and B from the dynamics x_dot = f(x, u)

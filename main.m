@@ -38,8 +38,6 @@ disp('- - - - - - -'); disp(" ");
 
 % for debugging
 load('./precomputedData/nominalTrajectory.mat');
-x_nom(:,1)'
-x_nom(:,end)'
 
 %% for debugging purposes
 %run('./utils/checkOpenLoop_IVP.m');
@@ -156,7 +154,7 @@ disp('- - - - - - -'); disp(" ");
 % keyboard
 %% optimize once the feasibility check passes through
 
-disp('Computing time-sampled invariant set certificates using SOS programming..'); disp('Hit Continue or F5'); disp(' ');
+disp('Computing time-sampled invariant set certificates using SOS programming..'); disp(' ');
 clearvars; close all; 
 
 drawFlag = 1;

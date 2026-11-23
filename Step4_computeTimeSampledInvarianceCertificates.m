@@ -41,9 +41,9 @@ convergenceTolerance = 1e-2; %if less than 1 percent change
 if ~exist('maxIter','var')
     maxIter = 1; %maximum number of iterations
 end
-rhoStepUpValue = 0.02; % analagous to alpha in gradient descent
+rhoStepUpValue = 0; % analagous to alpha in gradient descent
                        %[TUNEABLE] decrease this if you run into infeasibility 
-                       %Default Value: 0.001
+                       %Default Value: 0.02
 
 % 3. Parameters pertaining to defining terminal set/goal region
 startScaling = 0.8; %[TUNEABLE] increase this for a larger initial region
@@ -106,7 +106,6 @@ if ~exist('usageMode','var') || strcmp(usageMode, 'feasibilityCheck')
             title('Initial guess V and rho scaling (infeasible)');
         end
     end
-    disp(rhoInitialGuess');
     
     if ~infeasibilityStatus
         disp('Feasibility check passed for given rho guess..');
